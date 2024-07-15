@@ -1,0 +1,44 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+
+construct
+{
+  ?geneticEvidenceEvidenceLine cg:evidence
+  ?autosomalDominantOtherVariantEvidenceLine ,
+  ?autosomalDominantNullVariantEvidenceLine ,
+  ?autosomalDominantDeNovoVariantEvidenceLine .
+  
+  ?autosomalDominantOtherVariantEvidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy cg:GeneValidityOverallAutosomalDominantOtherVariantEvidenceCriteria ;
+  cg:strengthScore ?probandWithOtherVariantTypeWithGeneImpactTotal .
+
+  ?autosomalDominantNullVariantEvidenceLine a cg:EvidenceLine ;   cg:specifiedBy cg:GeneValidityOverallAutosomalDominantNullVariantEvidenceCriteria ;
+  cg:strengthScore ?probandWithPredictedOrProvenNullVariantTotal .
+
+  ?autosomalDominantDeNovoVariantEvidenceLine a cg:EvidenceLine ;  cg:specifiedBy cg:GeneValidityOverallAutosomalDominantDeNovoVariantEvidenceCriteria ;
+  cg:strengthScore ?variantIsDeNovoTotal .
+}
+where
+{
+  ?classification a gci:provisionalClassification ;
+  gci:approvedClassification true ;
+  gci:classificationPoints ?pointsTree .
+
+  BIND (IRI(CONCAT(str(?classification), "_overall_genetic_evidence_line")) AS ?geneticEvidenceEvidenceLine) .
+  
+  ?pointsTree gci:autosomalDominantOrXlinkedDisorder ?autosomalDominantOrXlinkedDisorderTree .
+
+  ?autosomalDominantOrXlinkedDisorderTree gci:probandWithOtherVariantTypeWithGeneImpact ?probandWithOtherVariantTypeWithGeneImpactTree .
+  ?probandWithOtherVariantTypeWithGeneImpactTree gci:pointsCounted ?probandWithOtherVariantTypeWithGeneImpactTotal .
+
+  ?autosomalDominantOrXlinkedDisorderTree gci:probandWithPredictedOrProvenNullVariant ?probandWithPredictedOrProvenNullVariantTree .
+  ?probandWithPredictedOrProvenNullVariantTree gci:pointsCounted ?probandWithPredictedOrProvenNullVariantTotal .
+
+  ?autosomalDominantOrXlinkedDisorderTree gci:variantIsDeNovo ?variantIsDeNovoTree .
+  ?variantIsDeNovoTree gci:pointsCounted ?variantIsDeNovoTotal .
+
+  BIND(IRI(CONCAT(str(?classification), "_ad_other_el")) AS ?autosomalDominantOtherVariantEvidenceLine) .
+  BIND(IRI(CONCAT(str(?classification), "_ad_null_el")) AS ?autosomalDominantNullVariantEvidenceLine) .
+  BIND(IRI(CONCAT(str(?classification), "_ad_dn_el")) AS ?autosomalDominantDeNovoVariantEvidenceLine) .
+  
+}

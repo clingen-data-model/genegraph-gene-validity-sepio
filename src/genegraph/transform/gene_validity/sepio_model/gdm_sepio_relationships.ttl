@@ -1,0 +1,189 @@
+# This file maps terms used in the GCI GDM record to their related types in the sepio
+# model. It is intended to be merged into the GDM model and used as a source to derive
+# SEPIO types from information in the source model
+
+@prefix : <http://dataexchange.clinicalgenome.org/gcixform/> .
+@prefix gci: <http://dataexchange.clinicalgenome.org/gci/> .
+@prefix cg: <http://dataexchange.clinicalgenome.org/terms/> .
+@prefix sepio:   <http://purl.obolibrary.org/obo/SEPIO_> .
+@prefix mi:   <http://purl.obolibrary.org/obo/MI_> .
+@base <http://dataexchange.clinicalgenome.org/gcixform> .
+
+
+# Proband types
+gci:PREDICTED_OR_PROVEN_NULL_VARIANT :criteria cg:GeneValidityProbandADNullCriteria .
+
+gci:VARIANT_IS_DE_NOVO :criteria cg:GeneValidityProbandADDeNovoCriteria .
+    
+gci:OTHER_VARIANT_TYPE_WITH_GENE_IMPACT :criteria
+cg:GeneValidityProbandADNonNullCriteria .
+    
+gci:TWO_VARIANTS_WITH_GENE_IMPACT_IN_TRANS :criteria cg:GeneValidityProbandARNonNullCriteria .
+    
+gci:TWO_VARIANTS_IN_TRANS_WITH_ONE_DE_NOVO :criteria
+cg:GeneValidityProbandARDeNovoNullVariantCriteria .
+
+# Variant types
+
+gci:PREDICTED_OR_PROVEN_NULL :criteria cg:GeneValidityNullVariantCriteria .
+
+gci:OTHER_VARIANT_TYPE :criteria cg:GeneValidityNonNullVariantCriteria .
+    
+# Variant types
+
+## TODO
+
+# biochemical function A
+cg:GeneValidityBiochemicalFunctionCriteria a cg:Criteria ;
+    :hasGCIType :BiochemicalFunction ;
+    :usedIn :Functional .
+
+cg:BiochemicalFunctionA a cg:StudyOutcome ;
+    :hasGCIType :BiochemicalFunction ;
+    :hasGCISubType :A ;
+    :usedIn :Functional .
+
+cg:BiochemicalFunctionB a cg:StudyOutcome ;
+    :hasGCIType :BiochemicalFunction ;
+    :hasGCISubType :B ;
+    :usedIn :Functional .
+
+### Protein Interaction
+cg:GeneValidityProteinInteractionCriteria a cg:Criteria ;
+    :hasGCIType :ProteinInteraction ;
+    :usedIn :Functional .
+
+mi:0208 a cg:StudyOutcome ;
+    :hasGCIType :ProteinInteraction ;
+    :hasGCISubType :GeneticInteraction ;
+    :usedIn :Functional .
+
+mi:0933 a cg:StudyOutcome ;
+    :hasGCIType :ProteinInteraction ;
+    :hasGCISubType :NegativeGeneticInteraction ;
+    :usedIn :Functional .
+
+mi:0915 a cg:StudyOutcome ;
+    :hasGCIType :ProteinInteraction ;
+    :hasGCISubType :PhysicalAssociation ;
+    :usedIn :Functional .
+
+mi:0935 a cg:StudyOutcome ;
+    :hasGCIType :ProteinInteraction ;
+    :hasGCISubType :PositiveGeneticInteraction ;
+    :usedIn :Functional .
+
+### Gene Expression
+
+cg:GeneValidityGeneExpressionCriteria a cg:Criteria ;
+    :hasGCIType :Expression ;
+    :usedIn :Functional .
+
+cg:GeneExpressionA  a cg:StudyOutcome ;
+    :hasGCIType :Expression ;
+    :hasGCISubType :A ;
+    :usedIn :Functional .
+
+cg:GeneExpressionB a cg:StudyOutcome ;
+    :hasGCIType :Expression ;
+    :hasGCISubType :B ;
+    :usedIn :Functional .
+
+### patient cell functional alteration
+cg:GeneValidityPatientCellFunctionalAlterationCriteria a cg:Criteria ;
+    :hasGCIType :PatientCells ;
+    :usedIn :FunctionalAlteration .
+
+### non-patient cell functional alteration
+cg:GeneValidityNonPatientCellFunctionalAlterationCriteria a cg:Criteria ;
+    :hasGCIType :NonPatientCells ;
+    :usedIn :FunctionalAlteration .
+
+# non-human model
+cg:GeneValidityNonHumanModelOrganismCriteria a cg:Criteria ;
+    :hasGCIType :NonHumanModel ;
+    :usedIn :ModelSystems .
+
+# cell culture model
+cg:GeneValidityCellCultureModelOrganismCriteria a cg:Criteria ;
+    :hasGCIType :CellCultureModel ;
+    :usedIn :ModelSystems .
+
+# human rescue
+cg:GeneValidityHumanRescueCriteria a cg:Criteria ;
+    :hasGCIType :Human ;
+    :usedIn :Rescue .
+
+# non-human model rescue
+cg:GeneValidityNonHumanRescueCriteria a cg:Criteria ;
+    :hasGCIType :NonHumanModel ;
+    :usedIn :Rescue .
+
+# rescue in cell culture
+cg:GeneValidityCellCultureRescueCriteria a cg:Criteria ;
+    :hasGCIType :CellCultureModel ;
+    :usedIn :Rescue .
+
+# rescue in patient cells
+cg:GeneValidityPatientCellRescueCriteria a cg:Criteria ;
+    :hasGCIType :PatientCells ;
+    :usedIn :Rescue .
+
+#### Case Control
+cg:GeneValidityCaseControlSingleVariantAnalysisCriteria a cg:Criteria ;
+    :hasGCIType cg:SingleVariantAnalysis .
+
+cg:GeneValidityCaseControlAggregateVariantAnalysisCriteria a cg:Criteria ;
+    :hasGCIType cg:AggregateVariantAnalysis .
+
+#### Segregation
+
+#### May be able to delete this ...     
+sepio:0004012 :supportingCriteriaType sepio:0000247 .
+
+
+
+#### Connections to leaf-node evidence lines
+
+# unscoreable evidence -- think about this one.
+sepio:0004002 :supportingCriteriaType sepio:0004127 .
+
+# :sepio/OverallGeneticEvidenceEvidenceLine
+cg:GeneValidityOverallGeneticEvidenceCriteria :supportingCriteriaType cg:GeneValidityNullVariantCriteria, cg:GeneValidityNonNullVariantCriteria ,  cg:GeneValidityMaximumProbandScoreCriteria .
+
+# :sepio/AutosomalDominantOtherVariantCriterionAssessment
+cg:GeneValidityOverallAutosomalDominantOtherVariantEvidenceCriteria :supportingCriteriaType cg:GeneValidityProbandADNonNullCriteria .
+
+# :sepio/AutosomalDominantNullVariantCriterionAssessment
+cg:GeneValidityOverallAutosomalDominantNullVariantEvidenceCriteria :supportingCriteriaType cg:GeneValidityProbandADNullCriteria .
+
+# :sepio/AutosomalDominantDeNovoVariantCriterionAssessment
+cg:GeneValidityOverallAutosomalDominantDeNovoVariantEvidenceCriteria :supportingCriteriaType cg:GeneValidityProbandADDeNovoCriteria .
+
+# :sepio/AutosomalRecessiveVariantCriterionAssessment
+cg:GeneValidityOverallAutosomalRecessiveVariantEvidenceCriteria :supportingCriteriaType cg:GeneValidityProbandARNonNullCriteria , cg:GeneValidityProbandARDeNovoNullVariantCriteria .
+
+# :sepio/CaseControlEvidenceCriterionAssessment
+cg:GeneValidityOverallCaseControlEvidenceCriteria :supportingCriteriaType
+    cg:GeneValidityCaseControlSingleVariantAnalysisCriteria ,
+        cg:GeneValidityCaseControlAggregateVariantAnalysisCriteria .
+        
+
+# :sepio/FunctionalCriterionAssessment
+cg:GeneValidityOverallFunctionalEvidenceCriteria :supportingCriteriaType cg:GeneValidityBiochemicalFunctionCriteria ,
+        cg:GeneValidityProteinInteractionCriteria ,
+        cg:GeneValidityGeneExpressionCriteria .
+        
+
+# :sepio/FunctionalAlterationCriterionAssessment
+cg:GeneValidityOverallFunctionalAlterationEvidenceCriteria :supportingCriteriaType cg:GeneValidityPatientCellFunctionalAlterationCriteria , cg:GeneValidityNonPatientCellFunctionalAlterationCriteria .
+
+# :sepio/ModelAndRescueCriterionAssessment
+cg:GeneValidityOverallModelAndRescueEvidenceCriteria :supportingCriteriaType cg:GeneValidityNonHumanModelOrganismCriteria ,
+        cg:GeneValidityCellCultureModelOrganismCriteria ,
+        cg:GeneValidityHumanRescueCriteria ,
+        cg:GeneValidityNonHumanRescueCriteria ,
+        cg:GeneValidityCellCultureRescueCriteria ,
+        cg:GeneValidityPatientCellRescueCriteria .
+        
+    

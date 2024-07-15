@@ -1,0 +1,56 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+
+construct
+{
+  ?classification cg:evidence ?experimentalEvidenceLine .
+  
+  ?experimentalEvidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy cg:GeneValidityOverallExperimentalEvidenceCriteria ;
+  cg:strengthScore ?experimentalEvidenceTotal ;
+  cg:evidence ?functionalEvidenceLine, ?functionalAlterationEvidenceLine, ?modelAndRescueEvidenceLine .
+
+  ?functionalEvidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy cg:GeneValidityOverallFunctionalEvidenceCriteria ;
+  cg:strengthScore ?functionTotal .
+
+  ?functionalAlterationEvidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy cg:GeneValidityOverallFunctionalAlterationEvidenceCriteria ;
+  cg:strengthScore ?functionalAlterationTotal .  
+
+  ?modelAndRescueEvidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy cg:GeneValidityOverallModelAndRescueEvidenceCriteria ;
+  cg:strengthScore  ?modelsRescueTotal .
+
+}
+where
+{
+  #### Bind evidence points
+  
+  ?classification a gci:provisionalClassification ;
+  gci:approvedClassification true ;
+  gci:classificationPoints ?pointsTree .
+
+  ?pointsTree gci:experimentalEvidenceTotal ?experimentalEvidenceTotal .
+
+  ?pointsTree gci:function ?functionTree .
+  ?functionTree gci:pointsCounted ?functionTotal .
+
+  ?pointsTree gci:functionalAlteration ?functionalAlterationTree .
+  ?functionalAlterationTree gci:pointsCounted ?functionalAlterationTotal .
+
+  ?pointsTree gci:modelsRescue ?modelsRescueTree .
+  ?modelsRescueTree gci:pointsCounted ?modelsRescueTotal .
+
+  ?pointsTree gci:segregation ?segregationTree .
+  ?segregationTree gci:pointsCounted ?segregationTotal .
+
+  BIND(IRI(CONCAT(str(?classification), "_experimental_evidence_line"))
+       AS ?experimentalEvidenceLine) .
+  BIND(IRI(CONCAT(str(?classification), "_functional_evidence_line"))
+       AS ?functionalEvidenceLine) .
+  BIND(IRI(CONCAT(str(?classification), "_functional_alteration_evidence_line"))
+       AS ?functionalAlterationEvidenceLine) .
+  BIND(IRI(CONCAT(str(?classification), "_model_rescue_evidence_line"))
+       AS ?modelAndRescueEvidenceLine) .
+}

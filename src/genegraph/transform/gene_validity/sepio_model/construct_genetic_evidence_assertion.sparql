@@ -1,0 +1,21 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+
+construct
+{
+  ?classification cg:evidence   ?geneticEvidenceLine .
+  
+  ?geneticEvidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy cg:GeneValidityOverallGeneticEvidenceCriteria ;
+  cg:strengthScore ?geneticEvidenceTotal .
+}
+where
+{
+  ?classification a gci:provisionalClassification ;
+  gci:approvedClassification true ;
+  gci:classificationPoints ?pointsTree .
+
+  ?pointsTree gci:geneticEvidenceTotal ?geneticEvidenceTotal .
+
+  BIND (IRI(CONCAT(str(?classification), "_overall_genetic_evidence_line")) AS ?geneticEvidenceLine) .
+}

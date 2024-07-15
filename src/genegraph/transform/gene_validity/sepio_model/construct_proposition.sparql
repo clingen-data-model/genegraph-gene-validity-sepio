@@ -1,0 +1,31 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+prefix mondo: <http://purl.obolibrary.org/obo/MONDO_>
+prefix hp: <http://purl.obolibrary.org/obo/HP_>
+
+construct 
+{
+  ?gdm a cg:GeneValidityProposition . 
+  ?gdm cg:gene ?hgnc .
+  ?gdm cg:disease ?disease .
+  ?gdm cg:modeOfInheritance ?moi .
+}
+where
+{
+  ?gdm a gci:gdm ;
+  gci:gene / gci:hgncId ?hgnc . # Adding path to gene to fix bug related to incomplete GDM
+
+  # Includes support for pre-refactor GCI curations
+  OPTIONAL {
+    ?gdm gci:disease / gci:diseaseId ?legacy_disease
+  }
+  
+  ?gdm gci:disease ?disease_node .
+
+  BIND(COALESCE(?legacy_disease, ?disease_node) AS ?disease) .
+  
+  ?gdm gci:modeInheritance ?moistr .
+
+  # The HPO term is embedded in a string, extract the digit and wrap in an IRI
+  BIND(IRI(CONCAT("http://purl.obolibrary.org/obo/HP_", REPLACE(?moistr, "[^0-9]", ""))) AS ?moi) .
+}

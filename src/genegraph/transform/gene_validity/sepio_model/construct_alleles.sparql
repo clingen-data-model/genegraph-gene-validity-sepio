@@ -1,0 +1,70 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix ga4gh: <https://terms.ga4gh.org/>
+prefix skos: <http://www.w3.org/2004/02/skos/core#>
+
+construct
+{
+
+  ?vd a ga4gh:VariationDescriptor ;
+  ga4gh:CanonicalReference ?canonical_reference ;
+  skos:prefLabel ?preferred_label . 
+
+}
+where
+{
+  
+  ?vd a gci:variant ;
+
+
+  OPTIONAL {
+    ?vd gci:canonicalTranscriptTitle ?canonicalTranscriptTitle .
+    FILTER regex(?canonicalTranscriptTitle, ".+")
+  }
+
+  OPTIONAL {
+    ?vd gci:maneTranscriptTitle ?maneTranscriptTitle .
+    FILTER regex(?maneTranscriptTitle, ".+")
+  }
+
+  OPTIONAL {
+    ?vd gci:preferredTitle ?preferredTitle .
+    FILTER regex(?preferredTitle, ".+")
+  }
+
+  OPTIONAL {
+    ?vd gci:clinvarVariantTitle ?clinvarVariantTitle .
+    FILTER regex(?clinvarVariantTitle, ".+")
+  }
+
+  OPTIONAL {
+    ?vd gci:hgvsNames / gci:GRCh38 ?grch38 .
+    FILTER regex(?grch38, ".+")
+  }
+
+  OPTIONAL {
+    ?vd gci:hgvsNames / gci:GRCh37 ?grch37 .
+    FILTER regex(?grch37, ".+")
+  }
+  
+  OPTIONAL {
+    ?vd gci:carId ?caIdstr .
+
+    BIND(IRI(CONCAT(?arbase, ?caIdstr)) AS ?caid) .
+  }
+
+  OPTIONAL {
+    ?vd gci:clinvarVariantId ?cvIdstr .
+
+    BIND(IRI(CONCAT(?cvbase, ?cvIdstr)) AS ?cvId) .
+  }
+
+  BIND(COALESCE(?caid, ?cvId) AS ?canonical_reference) .
+  
+  BIND(COALESCE(?canonicalTranscriptTitle,
+		?maneTranscriptTitle,
+		?preferredTitle,
+		?clinvarVariantTitle,
+		?grch38,
+		?grch37) AS ?preferred_label ) .
+}

@@ -1,0 +1,33 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix ga4gh: <https://terms.ga4gh.org/>
+prefix dc: <http://purl.org/dc/terms/>
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+construct
+{
+  ?scvIRI a dc:BibliographicResource ;
+  dc:title ?variationName ;
+  dc:creator ?scvSubmitter ;
+  dc:date ?scvDate ;
+  dc:abstract ?scvComment ;
+  cg:about ?variationIRI .
+}
+where
+
+{
+  ?scv gci:scvId ?scvId ;
+  gci:date ?scvDate ;
+  gci:submitter ?scvSubmitter ;
+  gci:variationId ?variationId ;
+  gci:variationName ?variationName ;
+  gci:vcvId ?vcvId .
+
+  OPTIONAL {
+    ?scv gci:comment ?scvComment .
+  }
+  
+  BIND(IRI(CONCAT(?scvbase, ?scvId)) AS ?scvIRI) .
+  BIND(IRI(CONCAT(?cvbase, ?variationId)) AS ?variationIRI) .
+}
+

@@ -1,0 +1,26 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+prefix dc: <http://purl.org/dc/terms/>
+
+construct {
+  ?evidenceLine a cg:UnscoreableEvidence ;
+  cg:evidence ?article ;
+  dc:description ?description .
+  
+}
+where {
+  ?evidenceLine a gci:annotation ;
+  gci:article / gci:pmid ?pmid ;
+  gci:articleNotes / gci:nonscorable ?nonscorable .
+
+  ?nonscorable gci:checked true .
+  
+  OPTIONAL {
+      ?nonscorable gci:text ?description . 
+  }
+
+  BIND(IRI(CONCAT(?pmbase, ?pmid)) AS ?article) .
+  BIND(IRI(CONCAT(STR(?evidenceLine), "_evidence_item")) AS ?evidenceItem) .
+
+}

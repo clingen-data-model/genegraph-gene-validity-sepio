@@ -1,0 +1,132 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+prefix dc: <http://purl.org/dc/terms/>
+prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+construct {
+  ?evidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy ?criteria ;
+  dc:description ?comments ;
+  cg:evidence ?evidenceItem ;
+  cg:strengthScore ?score ;
+  cg:direction ?scoreStatus .
+
+# Case control evidence item
+  ?evidenceItem a cg:Finding ;
+  cg:method ?studyType ;
+  dc:source ?article ;
+  rdfs:label ?label ;
+  cg:pValue ?pValue ;
+  cg:statisticalSignificanceType  ?statisticalSignificanceType ;
+  cg:statisticalSignificanceValueType ?statisticalSignificanceValueType ;
+  cg:statisticalSignificanceValue ?statisticalSignificanceValue  ;
+  cg:lowerConfidenceLimit ?confidenceFrom ; # stato
+  cg:upperConfidenceLimit ?confidenceTo ; # stato
+  dc:description ?scoreExplanation ;
+  cg:caseCohort ?caseCohort ;
+  cg:controlCohort ?controlCohort .
+
+  # Case cohort study
+  ?caseCohort a cg:Cohort ; # stato
+  cg:allGenotypedSequenced ?caseAllGenotypedSequenced ;
+  cg:numWithVariant ?caseNumWithVariant ;
+  cg:detectionMethod ?caseDetectionMethod ;
+  cg:alleleFrequency ?caseAlleleFrequency ;
+  cg:relatedCondition ?commonDiagnosis ;
+  cg:evidence ?evidenceItem .
+
+  # Control cohort study
+  ?controlCohort a cg:Cohort ; # stato
+  cg:allGenotypedSequenced ?controlAllGenotypedSequenced ;
+  cg:numWithVariant ?controlNumWithVariant ;
+  cg:detectionMethod ?controlDetectionMethod ;
+  cg:alleleFrequency ?controlAlleleFrequency ;
+  cg:evidence ?evidenceItem .
+}
+where {
+  ?evidenceLine a gci:caseControl ;
+  gci:label ?label ;
+  gci:studyType ?studyType ;
+  gci:date_created ?dateCreated ;
+  gci:statisticalValues ?statisticalValues ;
+  gci:scores ?scores .
+
+  OPTIONAL {
+    ?criteria a cg:Criteria ;
+    gcixform:hasGCIType ?studyType .
+  }
+
+  OPTIONAL {
+    ?evidenceLine gci:pValue ?pValue .
+  }
+
+  OPTIONAL {
+    ?evidenceLine gci:comments ?comments .
+  }
+  OPTIONAL {
+    ?evidenceLine gci:confidenceIntervalFrom ?confidenceFrom .
+    ?evidenceLine gci:confidenceIntervalTo ?confidenceTo .
+  }
+
+  BIND(IRI(CONCAT(STR(?evidenceLine), "_cc_evidence_item")) AS ?evidenceItem) .
+
+  ?evidenceLine gci:caseCohort ?caseCohort .
+  ?caseCohort gci:numberAllGenotypedSequenced ?caseAllGenotypedSequenced ;
+  gci:numberWithVariant ?caseNumWithVariant ;
+  gci:method ?caseMethod .
+
+  OPTIONAL {
+    ?caseCohort gci:alleleFrequency ?caseAlleleFrequency ;
+  }
+
+  OPTIONAL {
+    ?caseCohort gci:commonDiagnosis ?commonDiagnosis .
+    ?commonDiagnosis a gci:disease .
+  }
+
+  OPTIONAL {
+    ?caseMethod gci:specificMutationsGenotypedMethod ?caseDetectionMethod .
+  }
+
+  ?evidenceLine gci:controlCohort ?controlCohort .
+  ?controlCohort gci:numberAllGenotypedSequenced ?controlAllGenotypedSequenced ;
+  gci:numberWithVariant ?controlNumWithVariant ;
+  gci:method ?controlMethod .
+  
+  OPTIONAL {
+    ?controlCohort gci:alleleFrequency ?controlAlleleFrequency ;
+  }
+
+  OPTIONAL {
+    ?controlMethod gci:specificMutationsGenotypedMethod ?controlDetectionMethod .
+  }
+
+  ?statisticalValues gci:otherType ?statisticalSignificanceType .
+  
+  OPTIONAL {
+    ?statisticalValues gci:valueType ?statisticalSignificanceValueType .
+  }
+
+  OPTIONAL {
+    ?statisticalValues gci:value ?statisticalSignificanceValue .
+  }
+
+  ?scores a gci:evidenceScore .
+  OPTIONAL {
+    ?scores gci:score ?score .
+  }
+
+  OPTIONAL {
+    ?scores gci:scoreStatus ?scoreStatus .
+  }
+
+  OPTIONAL {
+    ?scores gci:scoreExplanation ?scoreExplanation .
+  }
+
+  ?annotation gci:caseControlStudies ?evidenceLine .
+  ?annotation gci:article ?articleGroup .
+  ?articleGroup gci:pmid ?pmid .
+  BIND(IRI(CONCAT(?pmbase, ?pmid)) AS ?article) .
+}

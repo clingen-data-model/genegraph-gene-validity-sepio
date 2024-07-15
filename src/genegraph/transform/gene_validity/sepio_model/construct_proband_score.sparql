@@ -1,0 +1,167 @@
+# Handles SOP5, SOP6 and SOP7.v1
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix sepio: <http://purl.obolibrary.org/obo/SEPIO_>
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+prefix dc: <http://purl.org/dc/terms/>
+prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+construct {
+  ?probandScoreEvidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy ?criteria ;
+  cg:strengthScore ?score ;
+  cg:evidence ?individual ; 
+  cg:calculatedScore ?calculatedScore ;
+  cg:direction  ?scoreStatus ;
+  dc:description ?evidenceLineDescription .
+
+  # Consider modeling as
+
+  # AlleleObservation
+  # Finding
+  # MolecularSequenceObservation -- mirroring FHIR. Let's try this one.
+  
+# Variant evidence Item
+  ?evidenceItem a cg:MolecularSequenceObservation ;
+  cg:allele ?variant ;
+  dc:source ?article ;
+  cg:alleleOrigin ?alleleOrigin ;
+  cg:paternityMaternityConfirmed ?paternityMaternityConfirmed .
+
+# Proband with variant evidence item
+  ?individual a cg:Proband ;
+  cg:sex ?sex ;
+  cg:ageUnit ?ageUnit ;
+  cg:ageType ?ageType ;
+  cg:ageValue ?ageValue ;
+  cg:ethnicity ?ethnicity ;
+  rdfs:label ?individualLabel ;
+  cg:previousTesting ?prevTesting ;
+  cg:previousTestingDescription ?prevTestingDescription ;
+  cg:firstTestingMethod ?firstTestingMethod ;
+  cg:secondTestingMethod ?secondTestingMethod ;  
+  cg:detectionMethod ?methodsOfDetection ;
+  cg:phenotypeFreeText ?phenotypeFreeText ;
+  cg:phenotypes ?phenotypes ;
+  dc:source ?article ;
+  cg:zygosity ?probandZygosity ;
+#  :sepio/is-about-allele ?variant ; # TODO find out what this is all about
+  cg:variant ?evidenceItem .
+  
+  ?family a cg:Family ;
+  rdfs:label ?familyLabel ;
+  cg:member ?individual .
+}
+where {
+  # Ensure this pattern does not exist for >= SOPV8 curations
+  FILTER NOT EXISTS { ?otherScore a gci:variantScore } .
+
+  ?evidenceLine a gci:evidenceScore ;
+  gci:scoreStatus ?scoreStatus ;
+  gci:date_created ?dateCreated ;
+  gci:affiliation ?affiliation .
+
+  OPTIONAL {
+    ?evidenceLine gci:caseInfoType / gcixform:criteria ?criteria .
+  }
+  
+  OPTIONAL {
+    ?evidenceLine gci:calculatedScore ?calculatedScore .
+  }
+
+  BIND (IRI(CONCAT(str(?evidenceLine), "_proband_score_evidence_line")) AS ?probandScoreEvidenceLine) 
+
+  OPTIONAL {
+    ?evidenceLine gci:scoreExplanation ?evidenceLineDescription .
+  }
+
+  OPTIONAL  {
+    ?evidenceLine gci:score ?adjustedScore .
+  }
+  BIND(COALESCE(?adjustedScore, ?calculatedScore) AS ?score) .
+
+  ?individual gci:scores ?evidenceLine ;
+  gci:variants ?variant ;
+  gci:label ?individualLabel ;
+  gci:proband true .
+
+  OPTIONAL {
+    ?individual gci:sex ?sex .
+  }
+
+  OPTIONAL {
+      ?individual gci:denovo ?deNovo .
+  }
+
+  BIND(IF(?deNovo = "Yes", :geno/DeNovoAlleleOrigin , IF(?deNovo = "No", :geno/GermlineAlleleOrigin , :geno/AlleleOrigin ) ) AS ?alleleOrigin) .
+
+  OPTIONAL {
+     ?individual gci:probandIs ?probandZygosity .
+  }
+
+  OPTIONAL {
+      ?individual gci:maternityPaternityConfirmed ?paternityMaternityConfirmed .
+  }
+
+  OPTIONAL {
+     ?individual gci:termsInDiagnosis ?phenotypeFreeText .
+  }
+
+  OPTIONAL {
+     ?individual gci:ageType ?ageType .
+  }
+
+  OPTIONAL {
+     ?individual gci:ageValue ?ageValue .
+  }
+
+  OPTIONAL {
+      ?individual gci:ageUnit ?ageUnit .
+  }
+
+  OPTIONAL {
+     ?individual gci:ethnicity ?ethnicity .
+  }
+
+  ?individual gci:method ?method .
+
+  ### TODO These two fail to parse; is needed for full version
+  # tristan -- 2023-07-14
+
+  # OPTIONAL {
+  #   ?method gci:genotypingMethods/rdf:rest{0}/rdf:first ?firstTestingMethod .
+  # }
+
+  # OPTIONAL {
+  #   ?method gci:genotypingMethods/rdf:rest{1}/rdf:first ?secondTestingMethod .
+  # }
+  
+  OPTIONAL {
+     ?method gci:previousTestingDescription ?prevTestingDescription .
+     BIND(IF( bound(?prevTestingDescription) && STRLEN(?prevTestingDescription) > 0, true, false) AS ?prevTesting) .
+  }
+
+  OPTIONAL {
+     ?method gci:specificMutationsGenotypedMethod ?methodsOfDetection .
+  }
+
+  OPTIONAL {
+     ?individual gci:hpoIdInDiagnosis ?phenotypes .
+  }
+
+  ?annotation  gci:individuals|gci:individualIncluded ?individual ;
+  ^gci:familyIncluded? / ^(gci:families|gci:groups)? / gci:article ?publication .
+
+  OPTIONAL {
+    ?family gci:individualIncluded ?individual ;
+    gci:label ?familyLabel ;
+    a gci:family .
+  }
+
+  BIND(IRI(CONCAT(STR(?evidenceLine), "_variant_evidence_item")) AS ?evidenceItem) .
+
+  ?publication gci:pmid ?pmid .
+  BIND(IRI(CONCAT(?pmbase, ?pmid)) AS ?article) .
+
+}

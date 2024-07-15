@@ -1,0 +1,92 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+prefix dc: <http://purl.org/dc/terms/>
+
+construct {
+  
+  ?classification a cg:EvidenceStrengthAssertion ;
+  cg:subject ?proposition ;
+  cg:evidenceStrength ?evidencelevel ;
+  cg:contributions ?contribution , ?publishContribution ;
+  dc:description ?description ;
+  cg:calculatedEvidenceStrength ?autoEvidenceLevel ;
+  cg:specifiedBy ?sopVersion ;
+  cg:curationReasons ?curation_reasons ;
+  cg:strengthScore ?evidencePointsTotal .
+
+  ?contribution cg:agent ?affiliation ;
+  cg:role cg:Approver ;
+  cg:date ?date .
+
+  ?publishContribution cg:agent ?affiliation ;
+  cg:role cg:Publisher ;
+  cg:date ?publishTime .
+
+}
+where {
+  
+  ?proposition a gci:gdm ;
+  gci:gene / gci:hgncId ?hgnc . # Adding path to gene to fix bug related to incomplete GDM
+
+  ?classification a gci:provisionalClassification ;
+  # TODO evaluate the effect of removing these
+  # Removing to attach unpublish action
+  gci:approvedClassification true ;
+  gci:publishClassification true ;
+  gci:autoClassification ?autoEvidenceLevel ;
+  gci:alteredClassification ?alteredEvidenceLevel ;
+  gci:classificationPoints ?pointsTree .
+
+  OPTIONAL {
+    ?classification gci:curationReasons ?curation_reasons .
+  }
+
+  OPTIONAL {
+    ?classification gci:evidenceSummary ?description_text .
+  }
+  
+  OPTIONAL {
+    ?classification gci:sopVersion ?declaredSopVersion .
+  }
+
+  # Per discussion with Gloria, logic to differentiate SOP v 6 and 5
+  
+  OPTIONAL {
+    ?pointsTree gci:segregation / gci:evidenceCountExome ?evidenceCountExome .
+  }
+
+  BIND(IF(bound(?evidenceCountExome), cg:GeneValidityCriteria6, cg:GeneValidityCriteria5) AS ?sopVerionFromStructure) .
+
+  BIND(COALESCE(?declaredSopVersion, ?sopVerionFromStructure) AS ?sopVersion) .
+
+  OPTIONAL {
+    ?classification gci:reasons ?reasonForChangedScore .
+  }
+
+  # Trying this out as a way to accomodate changed score
+  BIND(IF(bound(?reasonForChangedScore), CONCAT(?description_text, "\n", ?reasonForChangedScore), ?description_text) AS ?description) .
+  
+  OPTIONAL {
+    ?classification gci:classificationDate ?classificationDate .
+  }
+
+  OPTIONAL {
+    ?classification gci:approvalDate ?approvalDate .
+  }
+
+  OPTIONAL {
+    ?classification gci:approvalReviewDate ?approvalReviewDate .
+  }
+
+  BIND(COALESCE(?approvalReviewDate, ?approvalDate, ?classificationDate) AS ?date)
+
+  BIND(IF(?alteredEvidenceLevel = gcixform:NoModification, ?autoEvidenceLevel, ?alteredEvidenceLevel) AS ?evidencelevel) .
+
+  BIND(IRI(CONCAT(STR(?classification), "_contrib")) AS ?contribution ) .
+
+  BIND(IRI(CONCAT(STR(?classification), "_publish_contrib")) AS ?publishContribution ) .
+
+  ?pointsTree gci:evidencePointsTotal ?evidencePointsTotal .
+  
+}

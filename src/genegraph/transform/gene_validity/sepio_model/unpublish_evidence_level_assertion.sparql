@@ -1,0 +1,27 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+
+construct {
+  ?classification a cg:EvidenceStrengthAssertion ;
+  cg:subject ?proposition ;
+  cg:contributions ?publishContribution .
+
+  ?publishContribution cg:agent ?affiliation ;
+  cg:role cg:Unpublisher ;
+  cg:date ?publishTime .
+
+}
+where {
+  ?proposition a gci:gdm .
+  
+  ?classification a gci:provisionalClassification ;
+
+  FILTER NOT EXISTS {
+    ?classification  gci:approvedClassification true ;
+    gci:publishClassification true .
+  }
+
+  BIND(IRI(CONCAT(STR(?classification), "_publish_contrib")) AS ?publishContribution ) .
+  
+}

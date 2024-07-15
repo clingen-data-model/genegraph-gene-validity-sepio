@@ -1,0 +1,56 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+prefix dc: <http://purl.org/dc/terms/>
+prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+construct {
+  ?evidenceLine  a cg:EvidenceLine ;
+  cg:specifiedBy ?criteria ;
+  dc:description ?scoreDescription ;
+  cg:evidence ?evidenceItem ;
+  cg:direction ?scoreStatus ;
+  cg:calculatedScore ?calculatedScore ;
+  cg:strengthScore ?score .
+
+  # TODO identify functional alteration field
+  ?evidenceItem  a cg:FunctionalAlteration ;
+  dc:description ?evidenceDescription ;
+  dc:source ?article ;
+  rdfs:label ?evidenceLabel .
+}
+where {
+  ?evidenceLine a gci:evidenceScore ;
+  gci:calculatedScore ?calculatedScore ;
+  gci:scoreStatus ?scoreStatus  ;
+  gci:affiliation ?affiliation .
+
+  OPTIONAL {
+    ?evidenceLine gci:scoreExplanation ?scoreDescription .
+  }
+  # gci:uuid ?scoreUUID ;
+  # gci:experimental_scored ?gciEvidence .
+
+  OPTIONAL  {
+    ?evidenceLine gci:score ?adjustedScore .
+  }
+  
+  BIND(COALESCE(?adjustedScore, ?calculatedScore) AS ?score) .
+
+  ?evidenceItem gci:scores ?evidenceLine ;
+  gci:label ?evidenceLabel ;
+  gci:functionalAlteration ?functionalAlteration .
+
+  ?functionalAlteration gci:functionalAlterationType ?gciType ;
+  gci:evidenceForNormalFunction ?evidenceDescription .
+
+  ?criteria a cg:Criteria ;
+  gcixform:hasGCIType ?gciType ;
+  gcixform:usedIn gcixform:FunctionalAlteration .
+
+  ?annotation gci:experimentalData ?evidenceItem ;
+  gci:article ?publication .
+  ?publication gci:pmid ?pmid .
+  BIND(IRI(CONCAT(?pmbase, ?pmid)) AS ?article) .
+   
+}

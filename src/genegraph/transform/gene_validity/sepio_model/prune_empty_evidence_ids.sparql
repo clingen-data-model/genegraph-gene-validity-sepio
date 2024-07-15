@@ -1,0 +1,17 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+
+construct
+{
+  ?s ?p ?o
+}
+where
+{
+  ?s ?p ?o .
+  FILTER NOT EXISTS {
+    ?s cg:evidence ?o .
+    FILTER NOT EXISTS {
+      ?o a ?objecType
+    }
+  }
+}

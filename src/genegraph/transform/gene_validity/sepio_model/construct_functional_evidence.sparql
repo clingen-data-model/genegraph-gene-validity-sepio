@@ -1,0 +1,108 @@
+prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
+prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+prefix dc: <http://purl.org/dc/terms/>
+prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+construct {
+  ?evidenceLine  a cg:EvidenceLine ;
+  cg:specifiedBy ?criteria ;
+  dc:description ?scoreDescription ;
+  cg:evidence ?evidenceItem ;
+  cg:direction ?scoreStatus ;
+  cg:calculatedScore ?calculatedScore ;
+  cg:strengthScore ?score .
+
+  ?evidenceItem  a cg:Finding ;
+  cg:demonstrates ?studyOutcome ;
+  dc:description ?evidenceDescription ;
+  dc:source ?article ;
+  rdfs:label ?evidenceLabel .
+}
+where {
+
+  ?evidenceLine a gci:evidenceScore ;
+  gci:calculatedScore ?calculatedScore ;
+  gci:scoreStatus ?scoreStatus ;
+  gci:affiliation ?affiliation .
+
+  OPTIONAL {
+    ?evidenceLine gci:scoreExplanation ?scoreDescription .
+  }
+
+  OPTIONAL  {
+    ?evidenceLine gci:score ?adjustedScore .
+  }
+
+  BIND(COALESCE(?adjustedScore, ?calculatedScore) AS ?score) .
+
+  ?evidenceItem gci:scores ?evidenceLine ;
+  gci:label ?evidenceLabel ;
+  gci:evidenceType ?gciType .
+
+ OPTIONAL {
+    ?evidenceItem gci:biochemicalFunction / gci:geneFunctionConsistentWithPhenotype / gci:explanation ?biochemicalFuncConsistentWithPheno .
+  }
+
+  OPTIONAL {
+    ?evidenceItem gci:biochemicalFunction / gci:geneWithSameFunctionSameDisease / gci:evidenceForOtherGenesWithSameFunction ?biochemicalEvidenceForOtherGenes .
+  }
+
+  OPTIONAL {
+    ?evidenceItem gci:biochemicalFunction / gci:explanation ?biochemicalExplanation .
+  }
+
+  OPTIONAL {
+    ?evidenceItem gci:biochemicalFunction / gci:evidenceForFunction ?biochemicalEvidenceForFunction .
+  }
+  BIND(COALESCE(?biochemicalFuncConsistentWithPheno, ?biochemicalEvidenceForOtherGenes, ?biochemicalExplanation, ?biochemicalEvidenceForFunction) AS ?biochemicalFunctionDescription) .
+
+  OPTIONAL {
+    ?evidenceItem gci:proteinInteractions / gci:relationshipOfOtherGenesToDisese ?proteinInteractionDescription .
+  }
+
+  OPTIONAL {
+    ?evidenceItem gci:expression / ( gci:alteredExpression | gci:normalExpression )  / gci:evidence ?expressionDescription .
+  }
+
+  BIND(COALESCE(?expressionDescription, ?proteinInteractionDescription, ?biochemicalFunctionDescription) AS ?evidenceDescription) .
+
+  OPTIONAL {
+    FILTER( ?gciType = gcixform:ProteinInteraction )
+    ?evidenceItem gci:proteinInteractions / gci:interactionType ?proteinSubType .
+    BIND(?proteinSubType AS ?gciSubType) .
+  }
+
+  OPTIONAL {
+    FILTER( ?gciType = gcixform:Expression )
+    ?evidenceItem gci:expression ?expression .
+    OPTIONAL {
+       ?expression gci:normalExpression ?normalExpression .
+    }
+    BIND(IF(BOUND(?normalExpression), gcixform:A, gcixform:B) AS ?gciSubType) .
+  }
+
+  OPTIONAL {
+    FILTER( ?gciType = gcixform:BiochemicalFunction )
+    ?evidenceItem gci:biochemicalFunction ?bioChemFunction .
+    OPTIONAL {
+      ?bioChemFunction gci:geneWithSameFunctionSameDisease ?geneWithSameFuncAndDisease .
+    }
+    BIND(IF(BOUND(?geneWithSameFuncAndDisease), gcixform:A, gcixform:B) AS ?gciSubType) .
+  }
+
+  ?criteria a cg:Criteria ;
+  gcixform:hasGCIType ?gciType ;
+  gcixform:usedIn gcixform:Functional .
+
+  ?studyOutcome a cg:StudyOutcome ;
+  gcixform:hasGCIType ?gciType ;
+  gcixform:hasGCISubType ?gciSubType ;
+  gcixform:usedIn gcixform:Functional .
+
+  ?annotation gci:experimentalData ?evidenceItem ;
+  gci:article ?publication .
+
+  ?publication gci:pmid ?pmid .
+  BIND(IRI(CONCAT(?pmbase, ?pmid)) AS ?article) .
+ }
