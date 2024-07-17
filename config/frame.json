@@ -1,0 +1,30 @@
+{
+    "@context": {
+	"@vocab": "http://dataexchange.clinicalgenome.org/terms/",
+	"id": "@id",
+	"type": "@type",
+	"cg": "http://dataexchange.clinicalgenome.org/terms/",
+	"dc": "http://purl.org/dc/terms/",
+	"obo": "http://purl.obolibrary.org/obo/",
+	"hgnc": "https://identifiers.org/hgnc:",
+	"rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+	"cggv": "http://dataexchange.clinicalgenome.org/gci/",
+	"evidenceStrength": {"@type": "@vocab"},
+	"calculatedEvidenceStrength": {"@type": "@vocab"},
+	"computedEvidenceStrength": {"@type": "@vocab"},
+	"specifiedBy":  {"@type": "@vocab"},
+	"evidence": {"@container": "@set"},
+	"disease": {"@type": "@vocab"},
+	"gene": {"@type": "@vocab"},
+	"phenotypes": {"@type": "@id"},
+	"agent": {"@type": "@id"},
+	"role": {"@type": "@vocab"},
+	"modeOfInheritance": {"@type": "@vocab"},
+	"sex": {"@type": "@vocab"},
+	"direction": {"@type": "@vocab"},
+	"ageType": {"@type": "@vocab"},
+	"ageUnit": {"@type": "@vocab"},
+	"dc:source": {"@type": "@id"}
+    },
+    "@type": "EvidenceStrengthAssertion"
+}

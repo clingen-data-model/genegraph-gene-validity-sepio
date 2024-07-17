@@ -3,27 +3,28 @@
             [genegraph.framework.storage :as storage]
             [genegraph.framework.storage.rdf :as rdf]
             [io.pedestal.interceptor :as interceptor]
+            [io.pedestal.log :as log]
             [clojure.set :as set])
   (:import [java.time Instant]))
 
 (def activity-with-role
   (rdf/create-query "select ?activity where
-{ ?activity :bfo/realizes ?role }"))
+{ ?activity :cg/role ?role }"))
 
 (def curation-reasons
   (rdf/create-query "select ?reasons where
 { ?curation :cg/curationReasons ?reasons }"))
 
 (def publish-actions
-  (rdf/create-query "select ?x where { ?x :bfo/realizes :cg/PublisherRole } "))
+  (rdf/create-query "select ?x where { ?x :cg/role :cg/Publisher } "))
 
 (defn has-publish-action [m]
   (seq (publish-actions m)))
 
 (defn approval-date [model]
-  (some-> (activity-with-role model {:role :sepio/ApproverRole})
+  (some-> (activity-with-role model {:role :cg/Approver})
           first
-          (rdf/ld1-> [:sepio/activity-date])))
+          (rdf/ld1-> [:cg/date])))
 
 (defn no-change? [event prior-event]
   (rdf/is-isomorphic? (:gene-validity/model event)
@@ -42,7 +43,8 @@
   #{:cg/RecurationCommunityRequest
     :cg/RecurationTiming
     :cg/RecurationNewEvidence
-    :cg/RecurationFrameworkChange})
+    :cg/RecurationFrameworkChange
+    :cg/RecurationErrorAffectingScoreorClassification})
 
 (defn recuration-from-gci-reasons? [event]
   (let [reasons (set (map rdf/->kw
@@ -76,7 +78,7 @@
 (defn store-this-version [event]
   (event/store event
                :gene-validity-version-store
-               (::event/iri event)
+               (::proposition-iri event)
                (select-keys event
                             [:gene-validity/version
                              :gene-validity/model
@@ -98,7 +100,7 @@
 
 (defn add-version-map [event]
   (let [prior-version (storage/read (get-in event [::storage/storage :gene-validity-version-store])
-                                    (::event/iri event))]
+                                    (::proposition-iri event))]
     (if (= ::storage/miss prior-version)
       (assoc event :gene-validity/version {:major 1 :minor 0})
       (calculate-version-given-prior-version event prior-version))))
@@ -108,15 +110,65 @@
          :gene-validity/approval-date
          (approval-date (:gene-validity/model event))))
 
+(def assertion-iri
+  (rdf/create-query "select ?x where { ?x a :cg/EvidenceStrengthAssertion }"))
+
+(def construct-versioned-model
+  (rdf/create-query "
+construct {
+  ?s ?p ?o .
+  ?assertionIRI ?p1 ?o1 ;
+  :cg/version ?version ;
+  :cg/sequence ?sequence ;
+  :dc/isVersionOf ?s1 .
+
+} where {
+ { ?s ?p ?o .
+   FILTER NOT EXISTS { ?s a :cg/EvidenceStrengthAssertion . } 
+ }
+ union 
+ {
+  ?s1 ?p1 ?o1 .
+  ?s1 a :cg/EvidenceStrengthAssertion .
+ }
+}
+"))
+
+
 (defn add-versioned-model [event]
-  event)
+  (let [model (:gene-validity/model event)
+        version-str (str (get-in event [:gene-validity/version :major])
+                         "."
+                         (get-in event [:gene-validity/version :minor]))
+        assertion-with-version (rdf/resource
+                                (str (first (assertion-iri model))
+                                     "v"
+                                     version-str))
+        sequence (::event/offset event -1)]
+    (assoc event
+           :gene-validity/model
+           (construct-versioned-model model {:assertionIRI assertion-with-version
+                                             :version version-str
+                                             :sequence sequence}))))
+
+(def prop-query
+  (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }"))
+
+(defn add-prop-iri [event]
+  (assoc event
+         ::proposition-iri
+         (-> event
+             :gene-validity/model
+             prop-query
+             first
+             str)))
 
 (defn calculate-version [event]
   (let [event-with-approval-date (add-approval-date event)] 
     (if (and (has-publish-action (:gene-validity/model event))
              (:gene-validity/approval-date event-with-approval-date))
       (-> event-with-approval-date
-          add-approval-date
+          add-prop-iri
           add-version-map
           store-this-version
           add-versioned-model)

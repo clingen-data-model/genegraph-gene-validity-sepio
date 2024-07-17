@@ -58,7 +58,7 @@
   (str prefix "-" (:name env) "-" (:version env)))
 
 (def consumer-group
-  (qualified-kafka-name "gg"))
+  (qualified-kafka-name "gg-gvs2"))
 
 (def data-exchange
   {:type :kafka-cluster
@@ -94,7 +94,7 @@
          ::event/iri
          (-> (prop-query
               (:gene-validity/model event)
-              {:type :sepio/GeneValidityProposition})
+              {:type :cg/EvidenceStrengthAssertion})
              first
              str)))
 
@@ -149,9 +149,9 @@
    :interceptors [report-transform-errors
                   gci-model/add-gci-model
                   sepio-model/add-model
+                  versioning/add-version
                   add-iri
-                  add-publish-actions
-                  versioning/add-version]})
+                  add-publish-actions]})
 
 (def gene-validity-complete-topic
   {:name :gene-validity-complete
