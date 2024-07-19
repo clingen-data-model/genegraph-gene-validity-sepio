@@ -7,18 +7,20 @@
             [genegraph.transform.gene-validity.sepio-model :as sepio-model]
             [genegraph.transform.gene-validity.versioning :as versioning]
             [genegraph.framework.storage.rdf :as rdf]
+            [genegraph.framework.storage :as storage]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
             [io.pedestal.http :as http]
-            [clojure.set :as set]))
+            [clojure.set :as set])
+  (:gen-class))
 
 
 
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
           (System/getenv "DX_JAAS_CONFIG")) ; prevent this in cloud deployments
-    {:platform "stage"
-     :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG")
+    {:platform "dev"
+     :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG_DEV")
      :local-data-path "data/"}
     {}))
 
@@ -27,27 +29,27 @@
     "local" {:fs-handle {:type :file :base "data/base/"}
              :local-data-path "data/"}
     "dev" (assoc (env/build-environment "522856288592" ["dataexchange-genegraph"])
-                 :version 7
+                 :version 1
                  :name "dev"
                  :kafka-user "User:2189780"
                  :fs-handle {:type :gcs
                              :bucket "genegraph-framework-dev"}
                  :local-data-path "/data")
     "stage" (assoc (env/build-environment "583560269534" ["dataexchange-genegraph"])
-                   :version 7
+                   :version 1
                    :name "stage"
                    :function (System/getenv "GENEGRAPH_FUNCTION")
                    :kafka-user "User:2592237"
                    :fs-handle {:type :gcs
-                               :bucket "genegraph-gene-validity-stage-1"}
+                               :bucket "genegraph-gene-validity-sepio-stage-1"}
                    :local-data-path "/data")
     "prod" (assoc (env/build-environment "974091131481" ["dataexchange-genegraph"])
                   :function (System/getenv "GENEGRAPH_FUNCTION")
-                  :version 4
+                  :version 1
                   :name "prod"
                   :kafka-user "User:2592237"
                   :fs-handle {:type :gcs
-                              :bucket "genegraph-gene-validity-prod-1"}
+                              :bucket "genegraph-gene-validity-sepio-prod-1"}
                   :local-data-path "/data")
     {}))
 
@@ -58,7 +60,7 @@
   (str prefix "-" (:name env) "-" (:version env)))
 
 (def consumer-group
-  (qualified-kafka-name "gg-gvs2"))
+  (qualified-kafka-name "gg-gvs2-nt"))
 
 (def data-exchange
   {:type :kafka-cluster
@@ -83,7 +85,7 @@
   {:name :gene-validity-version-store
    :type :rocksdb
    :snapshot-handle (assoc (:fs-handle env)
-                           :path "genegraph-version-store-snapshot-v4.tar.lz4")
+                           :path "genegraph-version-store-snapshot-v5.tar.lz4")
    :path (str (:local-data-path env) "version-store")})
 
 (def prop-query
@@ -204,3 +206,38 @@
                        :kafka-cluster :data-exchange
                        :kafka-transactional-id (qualified-kafka-name "gv-transform"))}
    :http-servers gv-ready-server})
+
+(defn store-snapshots! [app]
+  (->> (:storage app)
+       (map val)
+       (filter :snapshot-handle)
+       (run! storage/store-snapshot)))
+
+(defn periodically-store-snapshots
+  "Start a thread that will create and store snapshots for
+   storage instances that need/support it. Adds a variable jitter
+   so that similarly configured apps don't try to backup at the same time."
+  [app period-hours run-atom]
+  (let [period-ms (* 60 60 1000 period-hours)]
+    (Thread/startVirtualThread
+     (fn []
+       (while @run-atom
+         (Thread/sleep period-ms)
+         (try
+           (store-snapshots! app)
+           (catch Exception e
+             (log/error :fn ::periodically-store-snapshots
+                        :exception e))))))))
+
+(defn -main [& args]
+  (log/info :msg "starting genegraph gene validity transform")
+  (let [app (p/init gv-transformer-def)
+        run-atom (atom true)]
+    (.addShutdownHook (Runtime/getRuntime)
+                      (Thread. (fn []
+                                 (log/info :fn ::-main
+                                           :msg "stopping genegraph")
+                                 (reset! run-atom false)
+                                 (p/stop app))))
+    (p/start app)
+    (periodically-store-snapshots app 6 run-atom)))

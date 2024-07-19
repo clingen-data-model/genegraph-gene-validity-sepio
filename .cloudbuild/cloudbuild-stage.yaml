@@ -1,0 +1,25 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'build', '.', '-t', 'genegraph-gene-validity-sepio:$COMMIT_SHA']
+- name: 'gcr.io/cloud-builders/docker'
+  args: [ 'tag', 'genegraph-gene-validity-sepio:$COMMIT_SHA',
+  'us-east1-docker.pkg.dev/clingen-stage/genegraph-stage/genegraph-gene-validity-sepio:$COMMIT_SHA']  
+- name: 'gcr.io/clingen-stage/git-image-updater'
+  secretEnv: ["GITHUB_TOKEN"]
+  args:
+    - '-c'
+    - |
+      git clone https://clingen-ci:$$GITHUB_TOKEN@github.com/clingen-data-model/architecture \
+      && cd architecture \
+      && /usr/bin/yq eval -i ".docker_image_tag = \"$COMMIT_SHA\"" ./helm/values/genegraph-gene-validity-sepio/values-stage.yaml \
+      && git add -u \
+      && git -c user.name="Clingen CI Automation" -c user.email="clingendevs@broadinstitute.org" commit -m "bumping docker image for stage genegraph-gene-validity-sepio" \
+      && git push origin master
+
+images:
+- 'us-east1-docker.pkg.dev/clingen-stage/genegraph-stage/genegraph-gene-validity-sepio:$COMMIT_SHA'
+
+availableSecrets:
+  secretManager:
+  - versionName: projects/clingen-stage/secrets/clingen-ci-github-token/versions/2
+    env: GITHUB_TOKEN
