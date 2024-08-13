@@ -13,7 +13,8 @@
             [io.pedestal.log :as log]
             [clojure.set :as set]
             [clojure.java.io :as io]
-            [clojure.edn :as edn])
+            [clojure.edn :as edn]
+            [clojure.java.shell :as shell :refer [sh]])
   (:import [java.time Instant OffsetDateTime Duration]
            [java.io PushbackReader]))
 
@@ -51,3 +52,15 @@
            #_gv/api-log-topic]))
   )
 
+(comment
+  (sh "echo" "$PATH")
+  (sh "kubectl" "get" "deployments"
+      :env (into {} (System/getenv)))
+
+  (sh "cat" :in "hi" :env {"PATH" nil})
+
+  (System/getenv)
+  (sh "/Users/tristan/google-cloud-sdk/bin/kubectl" "get" "deployments"
+      :env {"PATH" "/Users/tristan/google-cloud-sdk/bin"})
+
+  )

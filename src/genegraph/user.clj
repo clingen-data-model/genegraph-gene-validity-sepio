@@ -9,7 +9,8 @@
             [genegraph.framework.storage.rocksdb :as rocksdb]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
-            [portal.api :as portal])
+            [portal.api :as portal]
+            [clojure.data.json :as json])
   (:import [ch.qos.logback.classic Logger Level]
            [org.slf4j LoggerFactory]
            [java.time Instant LocalDate]
@@ -58,7 +59,10 @@
              :name :gene-validity-complete}
             :gene-validity-sepio
             {:type :simple-queue-topic
-             :name :gene-validity-sepio}}
+             :name :gene-validity-sepio}
+            :gene-validity-sepio-jsonld
+            {:type :simple-queue-topic
+             :name :gene-validity-sepio-jsonld}}
    :storage {:gene-validity-version-store gv/gene-validity-version-store
              :curation-output curation-output}
    :processors {:gene-validity-transform gv/transform-processor
@@ -124,8 +128,46 @@
            (take 1)
            (map transform-curation)
            (map (fn [e] (println (rdf/to-turtle (:gene-validity/model e))) e))
+           (map #(assoc %
+                        ::json-data
+                        (json/read-str
+                         (:gene-validity/json-ld %)
+                         :key-fn keyword)))
            (map #(dissoc % :gene-validity/gci-model :gene-validity/model))
            (into [])))))
+
+  (time
+   (tap>
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2024-07-16.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filter #(re-find #"cb06ff0d-1cc6-494c-9ce5-f7cb26f34620"
+                             (::event/value %)))
+           (take-last 1)
+           (map transform-curation)
+           (map (fn [e] (println (rdf/to-turtle (:gene-validity/model e))) e))
+           (map #(assoc %
+                        ::json-data
+                        (json/read-str
+                         (:gene-validity/json-ld %)
+                         :key-fn keyword)))
+           #_(map #(dissoc % :gene-validity/gci-model :gene-validity/model))
+           (map ::json-data)
+           (into [])))))
+
+  (time
+   (tap>
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2024-07-16.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filter #(re-find #"cb06ff0d-1cc6-494c-9ce5-f7cb26f34620"
+                             (::event/value %)))
+           (take-last 1)
+           (map transform-curation)
+           (map (fn [e] (println (rdf/to-turtle (:gene-validity/model e))) e))
+           (run! #(do (spit "/users/tristan/desktop/zeb2.ttl"
+                            (rdf/to-turtle (:gene-validity/model %)))
+                      (spit "/users/tristan/desktop/zeb2.json"
+                            (:gene-validity/json-ld %))))))))
+  
 )
 
 
@@ -135,3 +177,13 @@
   (portal/close)
   (portal/clear)
   )
+
+
+(comment
+  (def gv-dev (p/init gv/gv-transformer-def))
+  (p/start gv-dev)
+  (p/stop gv-dev)
+  
+)
+
+

@@ -7,10 +7,12 @@
             [genegraph.transform.gene-validity.sepio-model :as sepio-model]
             [genegraph.transform.gene-validity.versioning :as versioning]
             [genegraph.framework.storage.rdf :as rdf]
+            [genegraph.framework.storage.rdf.jsonld :as jsonld]
             [genegraph.framework.storage :as storage]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
             [io.pedestal.http :as http]
+            [clojure.java.io :as io]
             [clojure.set :as set])
   (:gen-class))
 
@@ -29,7 +31,7 @@
     "local" {:fs-handle {:type :file :base "data/base/"}
              :local-data-path "data/"}
     "dev" (assoc (env/build-environment "522856288592" ["dataexchange-genegraph"])
-                 :version 1
+                 :version 2
                  :name "dev"
                  :kafka-user "User:2189780"
                  :fs-handle {:type :gcs
@@ -106,12 +108,17 @@
     :enter (fn [e] (add-iri-fn e))}))
 
 (defn add-publish-actions-fn [event]
-  (event/publish event
-                 (-> event
-                     (set/rename-keys {::event/iri ::event/key
-                                       :gene-validity/model ::event/data})
-                     (select-keys [::event/key ::event/data])
-                     (assoc ::event/topic :gene-validity-sepio))))
+  (-> event
+      (event/publish (-> event
+                         (set/rename-keys {::event/iri ::event/key
+                                           :gene-validity/model ::event/data})
+                         (select-keys [::event/key ::event/data])
+                         (assoc ::event/topic :gene-validity-sepio)))
+      (event/publish (-> event
+                         (set/rename-keys {::event/iri ::event/key
+                                           :gene-validity/json-ld ::event/data})
+                         (select-keys [::event/key ::event/data])
+                         (assoc ::event/topic :gene-validity-sepio-jsonld)))))
 
 (def add-publish-actions
   (interceptor/interceptor
@@ -133,6 +140,7 @@
        true)))
   event)
 
+
 (def report-transform-errors
   {:name ::report-transform-errors
    :enter (fn [e] (report-transform-errors-fn e))
@@ -143,6 +151,21 @@
                                :exception ex)
             e)})
 
+(def json-ld-frame
+  (jsonld/json-file->doc (io/resource "frame.json")))
+
+(defn add-jsonld-fn [event]
+  (assoc event
+         :gene-validity/json-ld
+         (jsonld/model->json-ld
+          (:gene-validity/model event)
+          json-ld-frame)))
+
+(def add-jsonld
+  (interceptor/interceptor
+   {:name ::add-jsonld
+    :enter (fn [e] (add-jsonld-fn e))}))
+
 (def transform-processor
   {:type :processor
    :name :gene-validity-transform
@@ -152,6 +175,7 @@
                   gci-model/add-gci-model
                   sepio-model/add-model
                   versioning/add-version
+                  add-jsonld
                   add-iri
                   add-publish-actions]})
 
@@ -168,6 +192,12 @@
    :kafka-cluster :data-exchange
    :serialization ::rdf/n-triples
    :kafka-topic (qualified-kafka-name "gg-gvs2")
+   :kafka-topic-config {}})
+
+(def gene-validity-sepio-jsonld-topic 
+  {:name :gene-validity-sepio
+   :kafka-cluster :data-exchange
+   :kafka-topic (qualified-kafka-name "gg-gvs2-jsonld")
    :kafka-topic-config {}})
 
 (def gv-ready-server
@@ -199,6 +229,9 @@
                    :buffer-size 5)
             :gene-validity-sepio
             (assoc gene-validity-sepio-topic
+                   :type :kafka-producer-topic)
+            :gene-validity-sepio-jsonld
+            (assoc gene-validity-sepio-jsonld-topic
                    :type :kafka-producer-topic)}
    :storage {:gene-validity-version-store gene-validity-version-store}
    :processors {:gene-validity-transform

@@ -11,13 +11,22 @@ construct {
 }
 where {
   ?evidenceLine a gci:annotation ;
-  gci:article / gci:pmid ?pmid ;
   gci:articleNotes / gci:nonscorable ?nonscorable .
 
   ?nonscorable gci:checked true .
   
   OPTIONAL {
       ?nonscorable gci:text ?description . 
+  }
+
+  OPTIONAL {
+    ?evidenceLine gci:article / gci:pmid ?pmid .
+    BIND(IRI(CONCAT(?pmbase, ?pmid)) AS ?article) .
+  }
+
+  OPTIONAL {
+    ?evidenceLine gci:scv / gci:scvId ?scvid .
+    BIND(IRI(CONCAT(?scvbase, ?scvid)) AS ?article) .
   }
 
   BIND(IRI(CONCAT(?pmbase, ?pmid)) AS ?article) .

@@ -129,13 +129,13 @@ where {
   ### TODO These two fail to parse; is needed for full version
   # tristan -- 2023-07-14
 
-  # OPTIONAL {
-  #   ?method gci:genotypingMethods/rdf:rest{0}/rdf:first ?firstTestingMethod .
-  # }
+  OPTIONAL {
+    ?method gci:genotypingMethods / rdf:rest{0} / rdf:first ?firstTestingMethod .
+  }
 
-  # OPTIONAL {
-  #   ?method gci:genotypingMethods/rdf:rest{1}/rdf:first ?secondTestingMethod .
-  # }
+  OPTIONAL {
+    ?method gci:genotypingMethods / rdf:rest{1} / rdf:first ?secondTestingMethod .
+  }
   
   OPTIONAL {
      ?method gci:previousTestingDescription ?prevTestingDescription .
