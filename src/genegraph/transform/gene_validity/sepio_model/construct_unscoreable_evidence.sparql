@@ -29,7 +29,4 @@ where {
     BIND(IRI(CONCAT(?scvbase, ?scvid)) AS ?article) .
   }
 
-  BIND(IRI(CONCAT(?pmbase, ?pmid)) AS ?article) .
-  BIND(IRI(CONCAT(STR(?evidenceLine), "_evidence_item")) AS ?evidenceItem) .
-
 }
