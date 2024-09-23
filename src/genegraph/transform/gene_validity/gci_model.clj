@@ -169,6 +169,7 @@
             "8" "cg:GeneValidityCriteria8"
             "9" "cg:GeneValidityCriteria9"
             "10" "cg:GeneValidityCriteria10"
+            "11" "cg:GeneValidityCriteria11"
 
 
             ;; Sex
