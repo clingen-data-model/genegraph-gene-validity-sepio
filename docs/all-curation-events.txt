@@ -1,0 +1,291 @@
+ 
+ 
+All Curation Events 
+(Version 2024-06-06) 
+ 
+ 
+Kafka Topic Name:  all-curation-events 
+ 
+Production Endpoint:  pkc-4yyd6.us-east1.gcp.confluent.cloud:9092 
+ 
+Stage Endpoint:  pkc-4yyd6.us-east1.gcp.confluent.cloud;ports=9092 
+ 
+Purpose: 
+ 
+To communicate version changes for all ClinGen curations 
+ 
+Use Cases: 
+ 
+So downstream applications can efficiently and accurately present curation version history 
+So downstream applications can notify interested users about changes in curations 
+So ClinGen grant management can quickly gather statistical data for reports 
+ 
+Message Schema: 
+ 
+ 
+{ 
+       “schema_version” : “1.0” 
+        "event_type" :     "PUBLISH | UNPUBLISH | RETRACT | RETIRE", 
+        “event_subtype” :     “CURATION | TEST”, 
+        "workflow" :  { 
+  “classification_date” :     "ISO 8601 date", 
+  “publish_date” :      “ISO 8601 date", 
+                 “unpublish_date” :     “Iso 8601 date", 
+  // optional additional dates specific to the activity 
+                  
+         }, 
+         “source”  :     “GCI | VCI | DCI | ACI | EREPO | GENEGRAPH”, 
+         “activity” :     “ACTIONABILITY | DOSAGE | VALIDITY | VARIANT”, 
+         “references”  :    { 
+  “source_uuid” :     “string”, 
+  “dx_location” :     “string”, 
+  “alternate_uuid” :     “string”, 
+  "additional_properties" :     [{ "key": "values" }]   // optional additional information 
+         }, 
+        “affiliation” :    { 
+   “affiliate_id” :     “number”, 
+   “affiliate_name” :      “string” 
+         }, 
+"version" :    {  
+    "display" :     "decimal string", 
+    "internal" :     "decimal string", 
+    "reasons" :    “array” 
+    "description" :      “string",	 
+    "additional_properties" :     [{ "key": "values" }]   // optional additional information 
+        }, 
+     “changes”: [ 
+{ 
+“change_code”: “CHANGE_CODE (see below)”, 
+“attribute”: “string” 
+“from”: “string”, 
+“to”: “string” 
+} 
+   ], 
+       “notes” : { 
+“public”:     ”string”, 
+“private”:     “string”, 
+       “urls” : { 
+“source”  : https://curation.clinicalgenome.org/curation-central/6e14e6fb-aef7-4c97-9e06-a60e6ffcf64b/    “url”, 
+“preferred”:     “url” 
+        } 
+ } 
+ 
+ 
+ 
+ 
+Field Descriptions: 
+ 
+ 
+schema_version:  The version this schema follows.  Initially “1.0” .  (Required) 
+ 
+event_type:  Determines if the event refers to publishing (PUBLISH) or unpublishing (UNPUBLISH) a curation.  (Required) 
+ 
+event_subtype:  Determines if the event refers to a curation (CURATION) or another type (to be determined).  (Required) 
+ 
+workflow:  Contains a list of milestone dates, in ISO 8601 format, associated with the curation.  As long as the schema format is followed, the broadcaster can include any number of relevant dates.  Being common to all activities, certain dates are required, including: 
+ 
+classification_date:  the date on which the curation was classified.  Frequently known as the report date on public interfaces.   (Required) 
+ 
+publish_date:  for PUBLISH events, the date on which the curation was published to the various kafka topics.  (Required for PUBLISH) 
+ 
+unpublish_date:  for UNPUBLISH events, the date on which the curation was unpublished to the various kafka topics.  (Required for UNPUBLISH) 
+ 
+source:  Contains the enumerated string describing the source of the broadcast message.  Valid strings are described further in this document.  (Required) 
+ 
+activity:  Since the source may represent more than one activity, contains an enoumerated string describing the activity related to the curation.  Valid activities are ACTIONABILITY, DOSAGE, VALIDITY, and VARIANT.  (Required) 
+ 
+references:  Contains information relative to the curation.   As long as the schema format is followed, the broadcaster can include any number of descriptive items.  If a broadcaster chooses to provide additional information, it should be done under the “additional_properties” subsection to avoid potential conflict with future schema enhancements.  Being common to all activities, certain references are required, including: 
+ 
+source_uuid:  a unique string, relative to the curation activity, describing a particular curation and its ancestors.  Needed to apply the event to the proper curation linage.   (Required) 
+ 
+dx_location:  the Data Exchange topic stream to which detailed information on the curation is published.  Needed for when downstream applications want to obtain additional information about the curation.  (Required) 
+ 
+affiliation:  Contains the numeric affiliation ID and affiliate title associated with the curation.  The affiliation ID should be the standard format of 40### for GCEPS and 50### for VCEPS.  Working Group IDs to be determined by the GPM.  This field is now required since a version change may simply be associated with an affiliate change.   (Required) 
+ 
+version:  Contains version information relative to this particular event.  Certain fields are required as outlined below, however, the broadcaster may add additional information under the “additional_properties” field. 
+ 
+display:  the decimal string version number displayable to the public.  For example, “1.2”.  (Required) 
+ 
+internal:  the actual decimal string version number for internal use.  For example, “1.2.3.4”.  In some cases, the display and internal numbers may be the same.   (Required) 
+ 
+reasons:  an array of enumerated strings describing the reason(s) for the curation event.  The registered enumerated strings are described further in this document. (Required) 
+ 
+description:  a publicly displayable string further describing the reason for the curation event, or an empty string if there is nothing to display.   (Required) 
+ 
+notes:  an optional section containing both private and public notes relative to the overall event.  Public notes should be considered displayable to the public and may be more general than the description related to the version.  Private notes would be considered useful to applications consuming the topic stream, but are not meant for public display. 
+ 
+urls:   an optional list of URLs that may be useful to the application when consuming and displaying the event information.  For example, for VARIANT, this might contain a link to the Erepo for displaying complete curation details relative to this event.  While this is an optional field, commonality dictates that if it is used, the schema should be consistant across activities.  Therefor, certain descriptors are defined and required: 
+ 
+source:  the URL for the original source of the curation.  This may or may not be publicly accessible, but can be used by applications to confirm message contents. 
+ 
+preferred:  the URL for any intermediate application acting as a proxy for the curation source.  For example, this may contain a URL to the Erepo or Genegraph, which act as a proxy for the VCI and GCI is disseminating curation information.  
+ 
+ 
+ 
+Reason Code Enumerated Strings: 
+ 
+The following list should be used by all curation activities.  In the event an activity requires a new reason code, a new enumerated string will be created and added to the list for all to use. 
+ 
+NEW_CURATION : 
+ 
+Used then the curation is being published for the first time 
+ 
+RECURATION_NEW_EVIDENCE :  
+ 
+Used when the curation is being republished due to the addition of new evidence 
+ 
+RECURATION_COMMUNITY_REQUEST : 
+ 
+Used when a curation is being republished due to a request from the community 
+ 
+RECURATION_ERROR_SCORE_CLASS : 
+ 
+Used when a curation is being republished due to a scoring error 
+ 
+RECURATION_TIMING : 
+ 
+Used when a curation is being republished due to a periodic requirement 
+ 
+RECURATION_DISCREP_RESOLUTION : 
+ 
+Used when a curation is being republished as part of a discrepancy resolution 
+ 
+RECURATION_FRAMEWORK : 
+ 
+Used when a curation is being republished to conform to a newer SOP 
+ 
+ADMIN_UPDATE_DISEASE_NAME : 
+ 
+Used when a curation is being republished because of an ontology name change 
+ 
+ADMIN_UPDATE_ERROR_CLASS : 
+ 
+Used when a curation is being republished because of classification error caused by the system 
+ 
+ADMIN_UPDATE_SCHEMA_CHANGE : 
+ 
+Used when a curation is being republished because of a topic schema change 
+ 
+ADMIN_UPDATE_TYPE_FORMAT : 
+ 
+Used when a curation is being republished because ?? 
+ 
+ADMIN_UPDATE_SYSTEM_ERROR : 
+ 
+Used when a curation is being republished because of a system error 
+ 
+ADMIN_UPDATE_OTHER : 
+ 
+Used when a curation is being republished because of another systematic error not covered by previous reason codes 
+ 
+ 
+Curation Change Enumerated Strings: 
+ 
+The following list should be used by all recuration activities.  A new curation is assumed to have all by default. 
+ 
+CLASSIFICATION_CHANGE : 
+ 
+The classification has changed as a result of this recuration 
+ 
+DISEASE_NAME_CHANGE : 
+ 
+The disease name has changed, however, the ontology ID is still the same 
+ 
+DISEASE_ID_CHANGE : 
+ 
+The disease ontology ID has changed for this recuration.   
+ 
+GENE_SYMBOL_CHANGE :  
+ 
+The gene symbol has changed, however, the HGNC ID is still the same 
+ 
+MOI_CHANGE: 
+ 
+The Mode of Inheritance has changed from the previous curation 
+ 
+MECHANISM_OF_DISEASE_CHANGE: 
+ 
+N/A at this time 
+ 
+EXPERT_PANEL_CHANGE: 
+ 
+Ownership of the curation has transferred to a new Expert Panel or CDWG. 
+ 
+SOP_CHANGE: 
+ 
+A new SOP was used for the recuration 
+ 
+OTHER_CHANGE: 
+ 
+A code to use where none other applies but the activity feels it is important to note the change.  This should be used sparingly.  If one or more activities has a frequent need, then a new formal change code should be added. 
+ 
+ 
+ 
+Sources:   
+ 
+Any application responsible for disseminating curation data downstream or to the public may broadcast to the topic stream.  However, if not previously assigned a source code, one must be obtained so that all consumers recognize the source.  Current registered sources: 
+ 
+ACI 
+DCI 
+EREPO 
+GCI 
+GENEGRAPH 
+VCI 
+ 
+ 
+Example: 
+ 
+{ 
+        “schema_version”  :    “1.0”, 
+        "event_type" :     "PUBLISH", 
+        “event_subtype” :     “CURATION”, 
+        "workflow" :  { 
+  “classification_date” :     "2024-04-02T07:02:34−05:00", 
+  “publish_date” :      “2024-04-02T07:02:34−05:00", 
+  “original_publish_date:      “2019-11-19T12:34:02−05:00",                  
+         }, 
+         “source”  :     “DCI”, 
+         “activity” :     “DOSAGE”, 
+         “references”  :    { 
+  “source_uuid” :     “ISCA-47392”, 
+  “dx_location” :     “dosage-sensitivity”, 
+  “alternate_uuid” :     “403c179d-bc60-49bf-8cb3-1c09ae309fff”, 
+  "additional_properties" :     [ 
+ "curation_type": "Triplosensitivity" 
+         }, 
+        “affiliation” :    { 
+   “affiliate_id” :     “20001”, 
+   “affiliate_name” :      “Dosage Sensitivity Working Group” 
+         }, 
+"version" :    {  
+    "display" :     "3.1.2", 
+    "internal" :     "3.1.2.3", 
+    "reasons" :    [ “RECURATION_NEW_EVIDENCE”] 
+    "description" :      “New evidence published in PMID 123456 provided justification   for reassessing this gene for triplosensitivity",	 
+    "additional_properties" :     [ 
+ "triplosensitivity_score": "2", 
+“haploinsufficiency_score” : “1” 
+     ] 
+        }, 
+"changes" :    [ 
+{  
+    "change_code" :     "DISEASE_NAME_CHANGE", 
+    "from" :     "Old disease name", 
+    "to" :    “New disease name” 
+  “attribute”: “” 
+}, 
+{  
+    "change_code" :     "SOP_CHANGE", 
+    "from" :     "7", 
+    "to" :    “10” 
+  “attribute”: “” 
+}, 
+      ] 
+       “notes” : { 
+“public”:     ””, 
+“private”:     “Although the scores did not change, new evidence was evaluated, thus dictating the new version”, 
+       “urls” : { 
+“source”  : https://curation.clinicalgenome.org/curation-central/6e14e6fb-aef7-4c97-9e06-a60e6ffcf64b/    “https://dci.clinicalgenome.org/api/curation/403c179d-bc60-49bf-8cb3-1c09ae309fff” 
+        } 
+ } 
+ 

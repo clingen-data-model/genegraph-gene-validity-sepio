@@ -9,10 +9,11 @@ construct {
   cg:subject ?proposition ;
   cg:evidenceStrength ?evidencelevel ;
   cg:contributions ?contribution , ?publishContribution ;
-  dc:description ?description ;
+  dc:description ?description_text ;
   cg:calculatedEvidenceStrength ?autoEvidenceLevel ;
   cg:specifiedBy ?sopVersion ;
   cg:curationReasons ?curation_reasons ;
+  cg:curationReasonDescription ?reasonForChangedScore ;
   cg:strengthScore ?evidencePointsTotal .
 
   ?contribution cg:agent ?affiliation ;
@@ -65,7 +66,7 @@ where {
   }
 
   # Trying this out as a way to accomodate changed score
-  BIND(IF(bound(?reasonForChangedScore), CONCAT(?description_text, "\n", ?reasonForChangedScore), ?description_text) AS ?description) .
+  # BIND(IF(bound(?reasonForChangedScore), CONCAT(?description_text, "\n", ?reasonForChangedScore), ?description_text) AS ?description) .
   
   OPTIONAL {
     ?classification gci:classificationDate ?classificationDate .

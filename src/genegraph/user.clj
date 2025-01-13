@@ -10,10 +10,13 @@
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
             [portal.api :as portal]
-            [clojure.data.json :as json])
+            [clojure.data.json :as json]
+            [hato.client :as hc]
+            [clojure.data.csv :as csv]
+            [clojure.java.io :as io])
   (:import [ch.qos.logback.classic Logger Level]
            [org.slf4j LoggerFactory]
-           [java.time Instant LocalDate]
+           [java.time Instant LocalDate ]
            [org.apache.jena.rdf.model Model Statement]))
 
 (def prop-query
@@ -96,7 +99,7 @@
   
 
   (time (get-events-from-topic gv/gene-validity-complete-topic))
-
+  (+ 1 1)
   (time
    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2024-07-16.edn.gz"]
      (->> (event-store/event-seq r)
@@ -107,7 +110,7 @@
     (p/process (get-in test-app [:processors :gene-validity-transform])
                (assoc e
                       ::event/completion-promise (promise)
-                      ::event/skip-local-effects true
+                      #_#_::event/skip-local-effects true
                       ::event/skip-publish-effects true)))
 
   (/ 416130.856792 1000 60)
@@ -186,4 +189,71 @@
   
 )
 
+;; GCEP productivity report
+
+
+(comment
+
+  (def affiliations-csv
+    (-> (hc/get "https://docs.google.com/spreadsheets/d/1IF9GiP8iiFx1CndgqdWNGx4A_uM2GsWnV7GSiUO33bs/gviz/tq?tqx=out:csv&sheet=VCI%2FGCI%20Affiliations%20List")
+        :body))
+  (def affiliations
+    (->> (csv/read-csv affiliations-csv)
+         rest
+         #_(take 5)
+         (mapv (fn [[aff-name id]] [id aff-name]))
+         (into {})))
+
+  (def q4
+    (let [start-time (.toEpochMilli (Instant/parse "2024-10-01T00:00:00Z"))
+          end-time (.toEpochMilli (Instant/parse "2025-01-01T00:00:00Z"))]
+      (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-01-06.edn.gz"]
+        (->> (event-store/event-seq r)
+             #_(take 1)
+             (filter #(and (< start-time (::event/timestamp %))
+                           (< (::event/timestamp %) end-time)))
+             (into [])))))
+
+  (def recuration
+    #{:cg/RecurationCommunityRequest
+      :cg/RecurationTiming
+      :cg/RecurationNewEvidence})
+
+  (def new-curation
+    #{:cg/NewCuration})
+  
+  (do
+    (defn curation-facts [e]
+      (let [m (:gene-validity/model e)
+            q (rdf/create-query "select ?x where { ?x a :cg/EvidenceStrengthAssertion }")
+            source-q (rdf/create-query "
+select ?a where { 
+?contrib :cg/role :cg/Approver ;
+         :cg/agent ?a
+}")
+            assertion (first (q m))]
+        {:curation-reason (rdf/ld1-> assertion [:cg/curationReasons])
+         :source (first (source-q m))}))
+    (def q4-facts
+      (->> q4
+           (map transform-curation)
+           (mapv curation-facts))))
+  (with-open [w (io/writer "/Users/tristan/Desktop/q4-gcep-report.csv")]
+    (csv/write-csv w
+     (->> (remove #(or (nil? (:curation-reason %))
+                       (nil? (:source %)))
+                  q4-facts)
+          (group-by :source)
+          (mapv (fn [[k v]]
+                  [(affiliations (re-find #"\d+" (str k)))
+                   (count (filter new-curation (map rdf/->kw (map :curation-reason v))))
+                   (count (filter recuration (map rdf/->kw (map :curation-reason v))))]))
+          (cons ["Expert Panel" "New Curations" "Re-curations"]))))
+
+  (->> q4-facts
+       (map :curation-reason)
+       frequencies
+       tap>)
+  
+  )
 
