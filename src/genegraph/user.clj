@@ -7,6 +7,7 @@
             [genegraph.framework.kafka :as kafka]
             [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.storage.rocksdb :as rocksdb]
+            [genegraph.framework.storage :as storage]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
             [portal.api :as portal]
@@ -175,8 +176,9 @@
 
 
 (comment
-  (def portal (portal/open))
-  (add-tap #'portal/submit)
+  (do
+    (def portal (portal/open))
+    (add-tap #'portal/submit))
   (portal/close)
   (portal/clear)
   )
@@ -257,3 +259,7 @@ select ?a where {
   
   )
 
+(comment
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (storage/read db "http://dataexchange.clinicalgenome.org/gci/01f588c4-4fef-493d-b5e0-a76fb9492244"))
+  )
