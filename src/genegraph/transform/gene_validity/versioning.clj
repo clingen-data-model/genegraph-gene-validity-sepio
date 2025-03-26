@@ -44,7 +44,8 @@
     :cg/RecurationTiming
     :cg/RecurationNewEvidence
     :cg/RecurationFrameworkChange
-    :cg/RecurationErrorAffectingScoreorClassification})
+    :cg/RecurationErrorAffectingScoreorClassification
+    :cg/RecurationDiscrepancyResolution})
 
 (defn recuration-from-gci-reasons? [event]
   (let [reasons (set (map rdf/->kw
