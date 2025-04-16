@@ -14,7 +14,8 @@
             [clojure.data.json :as json]
             [hato.client :as hc]
             [clojure.data.csv :as csv]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [clojure.string :as str])
   (:import [ch.qos.logback.classic Logger Level]
            [org.slf4j LoggerFactory]
            [java.time Instant LocalDate ]
@@ -98,7 +99,7 @@
   (p/start test-app)
   (p/stop test-app)
   
-
+  
   (time (get-events-from-topic gv/gene-validity-complete-topic))
   (+ 1 1)
   (time
@@ -111,7 +112,7 @@
     (p/process (get-in test-app [:processors :gene-validity-transform])
                (assoc e
                       ::event/completion-promise (promise)
-                      #_#_::event/skip-local-effects true
+                      ::event/skip-local-effects false
                       ::event/skip-publish-effects true)))
 
   (/ 416130.856792 1000 60)
@@ -216,10 +217,22 @@
                            (< (::event/timestamp %) end-time)))
              (into [])))))
 
+  (def q1
+    (let [start-time (.toEpochMilli (Instant/parse "2025-01-01T00:00:00Z"))
+          end-time (.toEpochMilli (Instant/parse "2025-04-01T00:00:00Z"))]
+      (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-04-01.edn.gz"]
+        (->> (event-store/event-seq r)
+             (filter #(and (< start-time (::event/timestamp %))
+                           (< (::event/timestamp %) end-time)))
+             (into [])))))
+
   (def recuration
     #{:cg/RecurationCommunityRequest
       :cg/RecurationTiming
-      :cg/RecurationNewEvidence})
+      :cg/RecurationNewEvidence
+      :cg/RecurationDiscrepancyResolution
+      :cg/RecurationErrorAffectingScoreorClassification
+      :cg/RecurationFrameworkChange})
 
   (def new-curation
     #{:cg/NewCuration})
@@ -236,15 +249,15 @@ select ?a where {
             assertion (first (q m))]
         {:curation-reason (rdf/ld1-> assertion [:cg/curationReasons])
          :source (first (source-q m))}))
-    (def q4-facts
-      (->> q4
+    (def q1-facts
+      (->> q1
            (map transform-curation)
            (mapv curation-facts))))
-  (with-open [w (io/writer "/Users/tristan/Desktop/q4-gcep-report.csv")]
+  (with-open [w (io/writer "/Users/tristan/Desktop/q1-gcep-report.csv")]
     (csv/write-csv w
      (->> (remove #(or (nil? (:curation-reason %))
                        (nil? (:source %)))
-                  q4-facts)
+                  q1-facts)
           (group-by :source)
           (mapv (fn [[k v]]
                   [(affiliations (re-find #"\d+" (str k)))
@@ -252,7 +265,7 @@ select ?a where {
                    (count (filter recuration (map rdf/->kw (map :curation-reason v))))]))
           (cons ["Expert Panel" "New Curations" "Re-curations"]))))
 
-  (->> q4-facts
+  (->> q1-facts
        (map :curation-reason)
        frequencies
        tap>)
@@ -263,3 +276,112 @@ select ?a where {
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (storage/read db "http://dataexchange.clinicalgenome.org/gci/01f588c4-4fef-493d-b5e0-a76fb9492244"))
   )
+
+
+;;Limited curations that have been recurated and whether the classification has stayed the same, upgraded, downgraded, and the amount of time that had passed.
+;;Curations that were downgraded to limited after a recuration occurred
+
+(def assertion-query
+  (rdf/create-query "select ?x where 
+{ ?x a :cg/EvidenceStrengthAssertion . }"))
+
+(def approval-date-query
+  (rdf/create-query "select ?c where 
+{ ?x :cg/contributions ?c . 
+  ?c :cg/role :cg/Approver . } "))
+
+(defn approval-date [x]
+  (some-> (approval-date-query x {:x x})
+          first
+          (rdf/ld1-> [:cg/date])))
+
+(defn has-publish-action [m]
+  (< 0 (count ((rdf/create-query "select ?x where { ?x :cg/role :cg/Publisher } ") m))))
+
+(def classification-ordinals
+  {:cg/Disputed -1
+   :cg/Refuted -1
+   :cg/NoKnownDiseaseRelationship 0
+   :cg/Limited 1
+   :cg/Moderate 2
+   :cg/Strong 3
+   :cg/Definitive 4})
+
+
+(defn highest-classification [[k curation-sequence]]
+  (reduce
+   max
+   -2
+   (map #(classification-ordinals (:evidenceStrength %))
+        curation-sequence)))
+
+(defn lowest-classification [[k curation-sequence]]
+  (reduce
+   max
+   -2
+   (map #(classification-ordinals (:evidenceStrength %))
+        curation-sequence)))
+
+(defn gci-link [[k _]]
+  (str "https://curation.clinicalgenome.org/curation-central/"
+       (subs k 43)
+       "/"))
+
+(count "3e96651d-5979-416b-abc5-2e6702c35871")
+
+(count "http://dataexchange.clinicalgenome.org/gci/")
+(gci-link
+ ["http://dataexchange.clinicalgenome.org/gci/3e96651d-5979-416b-abc5-2e6702c35871" nil]
+ )
+
+
+
+(comment
+  (time
+   (def gdv-summary-events
+     (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-04-01.edn.gz"]
+       (->> (event-store/event-seq r)
+            (map #(:gene-validity/model (transform-curation %)))
+            (filter has-publish-action)
+            (mapv #(let [a (first (assertion-query %))
+                         gdm (rdf/ld1-> a [:cg/subject])]
+                     {:gdm (str gdm)
+                      :gene (str (rdf/ld1-> gdm [:cg/gene]))
+                      :disease (str (rdf/ld1-> gdm [:cg/disease]))
+                      :moi (rdf/->kw (rdf/ld1-> gdm [:cg/modeOfInheritance]))
+                      :evidenceStrength (rdf/->kw (rdf/ld1-> a [:cg/evidenceStrength]))
+                      :curationReasons (mapv rdf/->kw (rdf/ld-> a [:cg/curationReasons]))
+                      :approvalDate (approval-date a)}))))))
+  
+  (def curations-with-limited
+    (->> gdv-summary-events
+         (filter #(= :cg/Limited (:evidenceStrength %)))
+         (map :gdm)
+         set))
+
+  (->>  gdv-summary-events
+        (filter #(curations-with-limited (:gdm %)))
+        (group-by :gdm)
+        (filter (fn [[k v]]
+                  (and (< 1 (count v))
+                       (< 1 (-> (map :evidenceStrength v) set count)))))
+        #_(take 5)
+        (map (fn [gc]
+               {:gc gc
+                :highest (highest-classification gc)
+                :last (-> gc val last :evidenceStrength classification-ordinals)
+                :gci-link (gci-link gc)}))
+        (filter (fn [{:keys [highest last]}]
+                  (< 1 last)))
+        tap>)
+
+
+
+  #_(/ 363835.795167 1000 60)
+  )
+
+;; I guess Genegraph isn't woke enough...
+
+;; WARNING: Non well-formed subject [http://dataexchange.clinicalgenome.org/gci/FTM/Transman/Transgender Male] has been skipped.
+
+;; 

@@ -6,6 +6,7 @@
             [genegraph.transform.gene-validity.gci-model :as gci-model]
             [genegraph.transform.gene-validity.sepio-model :as sepio-model]
             [genegraph.transform.gene-validity.versioning :as versioning]
+            [genegraph.transform.gene-validity.website-events :as website-event]
             [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.storage.rdf.jsonld :as jsonld]
             [genegraph.framework.storage :as storage]
@@ -177,6 +178,7 @@
                   versioning/add-version
                   add-jsonld
                   add-iri
+                  website-event/website-version-interceptor
                   add-publish-actions]})
 
 (def gene-validity-complete-topic

@@ -318,6 +318,9 @@
                       x))
             element))
 
+(defn remove-extra-provisional-classifications [data]
+  (update-in data [:resourceParent :gdm] dissoc :provisionalClassifications))
+
 (defn preprocess-json
   "Walk GCI JSON prior to parsing as JSON-LD to clean up data."
   [data]
