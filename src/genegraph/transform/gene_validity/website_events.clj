@@ -61,9 +61,20 @@
 ;; version
 (s/def ::display ::non-empty-string)
 (s/def ::internal ::non-empty-string)
-(s/def ::reasons (s/coll-of #{"NEW_CURATION"}
+(s/def ::reasons (s/coll-of #{"RECURATION_TIMING"
+                              "ADMIN_UPDATE_DISEASE_NAME"
+                              "RECURATION_FRAMEWORK"
+                              "RECURATION_COMMUNITY_REQUEST"
+                              "RECURATION_GENEGRAPH_CALCULATED"
+                              "RECURATION_DISCREPANCY_RESOLUTION"
+                              "NEW_CURATION"
+                              "RECURATION_ERROR_SCORE_CLASS"
+                              "ADMIN_UPDATE_OTHER"
+                              "ADMIN_UPDATE_GENEGRAPH_CALCULATED"
+                              "RECURATION_NEW_EVIDENCE"}
                             :kind vector?))
-(s/def ::description string?)
+(s/def ::description (s/nilable string?))
+
 (s/def ::version (s/keys :req-un [::display ::internal ::reasons ::description]))
 
 ;; event_subtype
@@ -220,7 +231,8 @@ select ?act where {
       (mapv #(-> % rdf/->kw (genegraph-reason->website-reason "ADMIN_UPDATE_OTHER"))
             gci-reasons)
       (cond
-        (= 1 (:major version)) ["NEW_CURATION"]
+        (and (= 1 (:major version))
+             (= 0 (:minor version))) ["NEW_CURATION"]
         (= 0 (:minor version)) ["RECURATION_GENEGRAPH_CALCULATED"]
         :else ["ADMIN_UPDATE_GENEGRAPH_CALCULATED"]))))
 
@@ -458,21 +470,49 @@ select ?x where {
             (map #(str (clojure.data.json/write-str %) "\n"))
             (run! #(.write w %))))))
 
-  (with-open [r (io/reader "/Users/tristan/Downloads/curation-events-sample.ndjson")]
+  (with-open [r (io/reader "/Users/tristan/Desktop/curation-events-sample.ndjson")]
     (->> (line-seq r)
          (map #(json/read-str % :key-fn keyword))
-         (filter #(and (= "UNPUBLISH" (:event_type %))
-                       (not (get-in % [:workflow :unpublish_date]))))
-         first
+         (remove #(s/valid? ::event-data %))
+         (take 1)
+         (run! #(s/explain ::event-data %))))
+
+  ;;  (s/valid? ::event-data example-data)
+  
+  (with-open [r (io/reader "/Users/tristan/Desktop/curation-events-sample.ndjson")]
+    (->> (line-seq r)
+         (map #(json/read-str % :key-fn keyword))
+         #_(take 5)
+         (filterv #(re-find #"815e0f84-b530-4fd2-81a9-02e02bf352ee" ;; abcd1
+                              (get-in % [:references :alternate_uuid])))
+         #_(mapcat #(get-in % [:version :reasons]))
+         #_set
          tap>))
+
+
+  "d1230a85-2a8b-4321-b36d-213daae9a28a"
+  (with-open [r (io/reader "/Users/tristan/Desktop/curation-events-sample.ndjson")]
+    (tap>
+     (update-vals
+      (->> (line-seq r)
+           (map #(json/read-str % :key-fn keyword))
+           (filter #(re-find #"d1230a85-2a8b-4321-b36d-213daae9a28a"
+                             (get-in %
+                              [:references
+                               :additional_properties
+                               :genegraph_proposition_id]))))
+      (fn [v] (->> (map #(get-in % [:references :source_uuid]) v)
+                   set
+                   count)))))
 
   (with-open [r (io/reader "/Users/tristan/Desktop/curation-events-sample.ndjson")]
     (->> (line-seq r)
          (map #(json/read-str % :key-fn keyword))
-         (take 5)
-         #_(filterv #(re-find #"815e0f84-b530-4fd2-81a9-02e02bf352ee" ;; abcd1
-                              (get-in % [:references :alternate_uuid])))
-         (into [])
+         (filterv #(re-find #"d1230a85-2a8b-4321-b36d-213daae9a28a"
+                           (get-in %
+                                   [:references
+                                    :additional_properties
+                                    :genegraph_proposition_id])))
          tap>))
 
   (def abcd1
@@ -501,7 +541,7 @@ select ?x where {
   (defn gdm [m]
     (let [q (rdf/create-query "select ?x where 
 { ?x a :cg/GeneValidityProposition }")]
-      (some-> (q m) first str)))o
+      (some-> (q m) first str)))
   
   (->> abcd1-results
        (mapv (fn [{:gene-validity/keys [website-event model]}]

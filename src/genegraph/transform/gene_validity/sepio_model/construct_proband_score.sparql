@@ -63,8 +63,11 @@ where {
   gci:affiliation ?affiliation .
 
   OPTIONAL {
-    ?evidenceLine gci:caseInfoType / gcixform:criteria ?criteria .
+    ?evidenceLine gci:caseInfoType / gcixform:criteria ?gciCriteria .
   }
+
+  # 
+  BIND(COALESCE(?gciCriteria, cg:GeneValidityUncategorizedProbandCriteria) AS ?criteria) 
   
   OPTIONAL {
     ?evidenceLine gci:calculatedScore ?calculatedScore .

@@ -98,9 +98,11 @@
   (def test-app (p/init test-app-def))
   (p/start test-app)
   (p/stop test-app)
-  
-  
-  (time (get-events-from-topic gv/gene-validity-complete-topic))
+  (.start
+   (Thread.
+    #(do
+       (println "getting gv-complete")
+       (time (get-events-from-topic gv/gene-validity-complete-topic)))))
   (+ 1 1)
   (time
    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2024-07-16.edn.gz"]
@@ -112,7 +114,7 @@
     (p/process (get-in test-app [:processors :gene-validity-transform])
                (assoc e
                       ::event/completion-promise (promise)
-                      ::event/skip-local-effects false
+                      ::event/skip-local-effects true
                       ::event/skip-publish-effects true)))
 
   (/ 416130.856792 1000 60)
@@ -335,6 +337,28 @@ select ?a where {
  )
 
 
+(comment
+ (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-04-01.edn.gz"]
+       (->> (event-store/event-seq r)
+            (filterv #(re-find #"d1230a85-2a8b-4321-b36d-213daae9a28a"
+                               (::event/value %)))
+            (map #(transform-curation %))
+            (filter #(has-publish-action (:gene-validity/model %)))
+            (mapv #(dissoc % :gene-validity/model :gene-validity/gci-model))
+            tap>
+            #_(mapv #(let [a (first (assertion-query %))
+                           gdm (rdf/ld1-> a [:cg/subject])]
+                       {:gdm (str gdm)
+                        :gene (str (rdf/ld1-> gdm [:cg/gene]))
+                        :disease (str (rdf/ld1-> gdm [:cg/disease]))
+                        :moi (rdf/->kw (rdf/ld1-> gdm [:cg/modeOfInheritance]))
+                        :evidenceStrength (rdf/->kw (rdf/ld1-> a [:cg/evidenceStrength]))
+                        :curationReasons (mapv rdf/->kw (rdf/ld-> a [:cg/curationReasons]))
+                        :approvalDate (approval-date a)}))))
+
+ (+ 1 1)
+  )
+
 
 (comment
   (time
@@ -352,12 +376,19 @@ select ?a where {
                       :evidenceStrength (rdf/->kw (rdf/ld1-> a [:cg/evidenceStrength]))
                       :curationReasons (mapv rdf/->kw (rdf/ld-> a [:cg/curationReasons]))
                       :approvalDate (approval-date a)}))))))
+
+  "d1230a85-2a8b-4321-b36d-213daae9a28a"
+
+
+  (count gdv-summary-events)
   
   (def curations-with-limited
     (->> gdv-summary-events
          (filter #(= :cg/Limited (:evidenceStrength %)))
          (map :gdm)
          set))
+
+  (count curations-with-limited)
 
   (->>  gdv-summary-events
         (filter #(curations-with-limited (:gdm %)))
@@ -372,10 +403,26 @@ select ?a where {
                 :last (-> gc val last :evidenceStrength classification-ordinals)
                 :gci-link (gci-link gc)}))
         (filter (fn [{:keys [highest last]}]
-                  (< 1 last)))
-        tap>)
+                  (= last 0)))
+        count
+        )
+
+  ;; interval between when classification could have been upgraded
+  ;; and when it was upgraded
+
+  ;; number of limited curations where no additional evidence
+  ;; has been added over n years/recuration cycles
+
+  ;; Consider especially total points, esp limited with very few points
+
+  ;; Start with the 108 has been evaluated, no change
+  ;; provide list where:
+  ;; Dates of recuration
+  ;; total points
 
 
+  ;; checkbox for earliest report > earliest paper with
+  ;; genetic evidence 
 
   #_(/ 363835.795167 1000 60)
   )
@@ -385,3 +432,14 @@ select ?a where {
 ;; WARNING: Non well-formed subject [http://dataexchange.clinicalgenome.org/gci/FTM/Transman/Transgender Male] has been skipped.
 
 ;; 
+
+
+(comment
+  ;; Exploring SHACL testing for data integrity
+
+   (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-04-01.edn.gz"]
+       (->> (event-store/event-seq r)
+            (take 1)
+            (mapv #(transform-curation %))
+            (run! #(-> % :gene-validity/model rdf/pp-model))))
+  )
