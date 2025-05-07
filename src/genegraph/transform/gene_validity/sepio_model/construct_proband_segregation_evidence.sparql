@@ -8,7 +8,7 @@ construct {
   ?segregationID a cg:FamilyCosegregation ;
   cg:family ?family ;
   dc:description ?scoreDescription ;
-  cg:SequencingMethod ?sequencingMethod ;
+  cg:sequencingMethod ?sequencingMethod ;
   dc:source ?article ;
   cg:estimatedLodScore ?estimatedLodScore ;
   cg:publishedLodScore ?publishedLodScore ;
