@@ -18,12 +18,8 @@ construct {
 
   # Consider modeling as
 
-  # AlleleObservation
-  # Finding
-  # MolecularSequenceObservation -- mirroring FHIR. Let's try this one.
-  
 # Variant evidence Item
-  ?evidenceItem a cg:MolecularSequenceObservation ;
+  ?evidenceItem a cg:VariantObservation ;
   cg:allele ?variant ;
   dc:source ?article ;
   cg:alleleOrigin ?alleleOrigin ;

@@ -8,7 +8,7 @@ prefix dc: <http://purl.org/dc/terms/>
 prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
 construct {
-  ?evidenceLine a ?lineType ;
+  ?evidenceLine a cg:EvidenceLine ;
   cg:strengthScore ?score ;
   cg:evidence ?evidenceItem , ?functionEvidenceItem ; # evidence about variant
   cg:calculatedScore ?resultCalculatedScore ;
@@ -16,7 +16,7 @@ construct {
   dc:description ?evidenceLineDescription .
 
 # Variant evidence item
-  ?evidenceItem a ?itemType ;
+  ?evidenceItem a cg:VariantObservation ;
   cg:allele ?variant ;
   dc:source ?article ;
   cg:alleleOrigin ?alleleOrigin ;
@@ -65,6 +65,9 @@ where {
     ?variantType gcixform:hasEvidenceLineType ?evidenceLineType ;
     gcixform:hasEvidenceItemType ?evidenceItemType .
   }
+
+
+  # TODO -- fix this; this escaped the purge of SEPIO types
   # NonNullVariantEvidenceLine
   BIND(IF(BOUND(?variantType), ?evidenceLineType, sepio:0004097) AS ?lineType) .
   # VariantEvidenceItem
