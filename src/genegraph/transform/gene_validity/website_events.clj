@@ -277,7 +277,7 @@ select ?x where {
   (let [curation-model (:gene-validity/model event)
         assertion (first (assertion-query curation-model))
         version (version-string (:gene-validity/version event))
-        snapshot-id (str (rdf/ld1-> assertion [:dc/isVersionOf]))]
+        snapshot-id (str (rdf/ld1-> assertion [:cg/GCISnapshot]))]
     {:schema_version "1.0"
      :event_subtype "CURATION"
      :workflow {:classification_date (activity-date curation-model
@@ -287,15 +287,15 @@ select ?x where {
                 :unpublish_date nil} 
      :source "GENEGRAPH"
      :activity "VALIDITY"
-     :references {:source_uuid snapshot-id
-                   :alternate_uuid (str assertion)
-                   :dx_location "gene-validity-sepio"
-                   :additional_properties
-                   {:gci_snapshot_id (if (seq snapshot-id)
-                                       (subs snapshot-id 43)
-                                       nil)
-                    :genegraph_proposition_id
-                    (proposition-id curation-model)}}
+     :references {:source_uuid (str assertion)
+                  :alternate_uuid (str assertion)
+                  :dx_location "gene-validity-sepio"
+                  :additional_properties
+                  {:gci_snapshot_id (if (seq snapshot-id)
+                                      (subs snapshot-id 43)
+                                      nil)
+                   :genegraph_proposition_id
+                   (proposition-id curation-model)}}
      :affiliation {:affiliate_id (affiliation-number curation-model)}
      :version {:display version
                :internal version
@@ -312,9 +312,7 @@ select ?x where {
                       (activity-date (:gene-validity/model event)
                                      :cg/Unpublisher))
             (assoc :event_type "UNPUBLISH"))
-      (do
-        (println "unpublish-event no model")
-        nil))))
+      nil)))
 
 (defn publish-event->website-event [event]
   (assoc (event->base-event event)

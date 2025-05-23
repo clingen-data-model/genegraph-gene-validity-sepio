@@ -2,10 +2,57 @@
   (:require [genegraph.framework.event :as event]
             [genegraph.framework.storage :as storage]
             [genegraph.framework.storage.rdf :as rdf]
+            [genegraph.framework.id :as id]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
             [clojure.set :as set])
   (:import [java.time Instant]))
+
+(id/register-type {:type :cg/GeneValidityProposition
+                   :defining-attributes
+                   [:cg/gene :cg/disease :cg/modeOfInheritance]})
+
+(def prop-query
+  (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }"))
+
+(defn proposition-id [model]
+  (let [prop (first (prop-query model))]
+    (id/iri
+     {:type :cg/GeneValidityProposition
+      :cg/gene (str (rdf/ld1-> prop [:cg/gene]))
+      :cg/disease (str (rdf/ld1-> prop [:cg/disease]))
+      :cg/modeOfInheritance (str (rdf/ld1-> prop [:cg/modeOfInheritance]))})))
+
+(def rename-proposition-query
+  (rdf/create-query "
+construct {
+  ?s ?p ?o .
+  ?propIRI ?p1 ?o1 .
+  ?s2 ?p2 ?propIRI .
+} where {
+ { ?s ?p ?o .
+   FILTER NOT EXISTS { ?s a :cg/GeneValidityProposition . }
+   FILTER NOT EXISTS { ?o a :cg/GeneValidityProposition . } 
+ }
+ union 
+ {
+  ?s1 a :cg/GeneValidityProposition .
+  ?s1 ?p1 ?o1 .
+  ?s2 ?p2 ?s1 .
+ }
+}
+"))
+
+(defn rename-proposition [model]
+  (rename-proposition-query
+   model
+   {:propIRI (rdf/resource (proposition-id model))}))
+
+#_(-> genegraph.user/examples
+    first
+    :gene-validity/model
+    rename-proposition
+    rdf/pp-model)
 
 (def activity-with-role
   (rdf/create-query "select ?activity where
@@ -121,7 +168,8 @@ construct {
   ?assertionIRI ?p1 ?o1 ;
   :cg/version ?version ;
   :cg/sequence ?sequence ;
-  :dc/isVersionOf ?s1 .
+  :cg/GCISnapshot ?snapshotIRI ;
+  :dc/isVersionOf ?assertionRoot .
 
 } where {
  { ?s ?p ?o .
@@ -141,19 +189,22 @@ construct {
         version-str (str (get-in event [:gene-validity/version :major])
                          "."
                          (get-in event [:gene-validity/version :minor]))
+        assertion-root (first (prop-query model))
         assertion-with-version (rdf/resource
-                                (str (first (assertion-iri model))
+                                (str assertion-root
                                      "v"
                                      version-str))
-        sequence (::event/offset event -1)]
+        sequence (::event/offset event -1)
+        model-with-renamed-proposition (rename-proposition model)]
     (assoc event
            :gene-validity/model
-           (construct-versioned-model model {:assertionIRI assertion-with-version
-                                             :version version-str
-                                             :sequence sequence}))))
+           (construct-versioned-model model-with-renamed-proposition
+                                      {:assertionIRI assertion-with-version
+                                       :assertionRoot assertion-root
+                                       :snapshotIRI (first (assertion-iri model))
+                                       :version version-str
+                                       :sequence sequence}))))
 
-(def prop-query
-  (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }"))
 
 (defn add-prop-iri [event]
   (assoc event

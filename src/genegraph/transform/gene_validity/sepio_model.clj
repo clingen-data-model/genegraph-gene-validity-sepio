@@ -99,8 +99,6 @@
    unpublish-evidence-level-assertion])
 
 
-
-
 (def approval-activity-query
   (rdf/create-query "select ?activity where
  { ?activity :bfo/realizes  :sepio/ApproverRole }"))
@@ -169,7 +167,7 @@
                             :sepio/evidence-line-strength-score]))))
        proband-evidence-lines)))))
 
-(defn gci-data->sepio-model [gci-data params]
+(defn publish-action [gci-data params]
   (let [gci-model (rdf/union gci-data gdm-sepio-relationships)
         unlinked-model (apply
                         rdf/union
@@ -189,6 +187,10 @@
         unlink-segregations-when-no-proband-and-lod-scores
         prune-empty-evidence-lines
         prune-empty-evidence-ids)))
+
+(defn gci-data->sepio-model [gci-data params]
+  (if (= :cg/PublisherRole (:publishRole params))
+    ))
 
 (defn add-model-fn [event]
   (assoc event

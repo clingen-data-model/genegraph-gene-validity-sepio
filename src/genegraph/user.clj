@@ -1,5 +1,6 @@
 (ns genegraph.user
   (:require [genegraph.transform.gene-validity :as gv]
+            [genegraph.transform.gene-validity.versioning :as versioning]
             [genegraph.framework.app :as app]
             [genegraph.framework.event :as event]
             [genegraph.framework.event.store :as event-store]
@@ -422,12 +423,22 @@ select ?a where {
 
 
   ;; checkbox for earliest report > earliest paper with
-  ;; genetic evidence 
+  ;; genetic evidence
+
+
+  ;; Spreadsheet for full gene curation call
+  ;; Recurations done
+  ;; GDM GCEP 1st 2nd 3rd reclassification date Total points, genetic points, exp points date of first publication.
+  
+  ;; Recurations not done
+  ;; same columns as above, w/o recurations obviously.
+
+  ;; list of Limited > 3yo, without recuration
 
   #_(/ 363835.795167 1000 60)
   )
 
-;; I guess Genegraph isn't woke enough...
+
 
 ;; WARNING: Non well-formed subject [http://dataexchange.clinicalgenome.org/gci/FTM/Transman/Transgender Male] has been skipped.
 
@@ -442,4 +453,120 @@ select ?a where {
             (take 1)
             (mapv #(transform-curation %))
             (run! #(-> % :gene-validity/model rdf/pp-model))))
+  )
+
+(defn gdm-id [event]
+  (let [gdm-id-paths [[::event/data :resourceParent :gdm :PK]
+                      [::event/data :properties :resourceParent :gdm :uuid]
+                      [::event/data :resourceParent :gdm :uuid]]]
+    (some #(get-in event %) gdm-id-paths)))
+
+(defn add-gdm-id [event]
+  (assoc event ::gdm-id (gdm-id event)))
+
+
+
+(comment
+  (do
+    (defn transform-curation-for-writer [e]
+      (p/process (get-in test-app [:processors :gene-validity-transform])
+                 (assoc e ::event/completion-promise (promise))))
+
+    (defn sepio-publish-event [source-event]
+      (-> (filter #(= :gene-validity-sepio (::event/topic %))
+                  (::event/publish source-event))
+          first
+          (assoc ::event/format ::rdf/n-triples
+                 ::event/timestamp (::event/timestamp source-event))
+          event/serialize
+          (dissoc ::event/data)))
+    
+    (defn write-transformed-events [source-file target-file filter-str]
+      ;; topic->event-file redirects stdout
+      ;; need to supress kafka logs for the duration
+      (.setLevel
+       (LoggerFactory/getLogger Logger/ROOT_LOGGER_NAME) Level/ERROR)
+      (event-store/with-event-writer [w (io/file target-file)]
+        (event-store/with-event-reader [r source-file]
+          (->> (event-store/event-seq r)
+               (filter #(re-find (re-pattern filter-str) (::event/value %)))
+               (map #(-> %
+                         transform-curation-for-writer
+                         sepio-publish-event))
+               (run! prn))))
+      (.setLevel (LoggerFactory/getLogger Logger/ROOT_LOGGER_NAME) Level/INFO)))
+
+  #_(write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"
+                            "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e")
+
+  (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"
+                            "/Users/tristan/data/genegraph-neo/abcd1-events.edn.gz"
+                            "815e0f84-b530-4fd2-81a9-02e02bf352ee")
+  
+  ;; Versioning identifiers
+  (time
+   (def gdm-ids
+     (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
+       (->> (event-store/event-seq r)
+            #_(take-last 1)
+            #_(mapv #(transform-curation %))
+            (map #(-> %
+                      event/deserialize
+                      gdm-id))
+            (into [])))))
+  
+  (def examples
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
+      (->> (event-store/event-seq r)
+           (take 1)
+           (mapv #(transform-curation %)))))
+
+  (-> examples first :gene-validity/model rdf/pp-model)
+
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
+    (->> (event-store/event-seq r)
+         (take 1)
+         (mapv transform-curation-for-writer)
+         (mapv sepio-publish-event)
+         #_(mapv :gene-validity/website-event)
+         #_(mapv #(dissoc % :gene-validity/gci-model :gene-validity/model))
+         
+         tap>
+         #_(run! #(rdf/pp-model (:gene-validity/model %)))))
+
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
+    (->> (event-store/event-seq r)
+         (take 1)
+         tap>))
+
+  (let [es-q (rdf/create-query
+              "select ?x where { ?x a :cg/EvidenceStrengthAssertion }")]
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/abcd1-events.edn.gz"]
+      (->> (event-store/event-seq r)
+           (mapv #(-> %
+                     event/deserialize
+                     ::event/data
+                     es-q
+                     first
+                     str))
+           tap>)))
+
+    (let [es-q (rdf/create-query
+              "select ?x where { ?x a :cg/EvidenceStrengthAssertion }")]
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/abcd1-event"]
+      (->> (event-store/event-seq r)
+           count
+           
+           )))
+  
+  (->> gdm-ids
+       frequencies
+       (sort-by val)
+       reverse
+       (take 20)
+       tap>)
+
+  "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
+
+  "https://search.clinicalgenome.org/kb/gene-validity/CGGV:assertion_815e0f84-b530-4fd2-81a9-02e02bf352ee-2020-12-18T050000.000Z?page=1&size=25&search="
   )
