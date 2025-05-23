@@ -146,12 +146,18 @@ construct {
       (add-change-type prior-version)
       (add-version-increment-given-change prior-version)))
 
-(defn add-version-map [event]
-  (let [prior-version (storage/read (get-in event [::storage/storage :gene-validity-version-store])
-                                    (::proposition-iri event))]
+(defn read-prior-version [event gdm-iri]
+  (let [prior-version
+        (storage/read (get-in event [::storage/storage :gene-validity-version-store])
+                      gdm-iri)]
     (if (= ::storage/miss prior-version)
-      (assoc event :gene-validity/version {:major 1 :minor 0})
-      (calculate-version-given-prior-version event prior-version))))
+      nil
+      prior-version)))
+
+(defn add-version-map [event]
+  (if-let [prior-version (read-prior-version event (::proposition-iri event))]
+    (calculate-version-given-prior-version event prior-version)
+    (assoc event :gene-validity/version {:major 1 :minor 0})))
 
 (defn add-approval-date [event]
   (assoc event
@@ -225,6 +231,9 @@ construct {
           store-this-version
           add-versioned-model)
       event-with-approval-date)))
+
+#_(defn update-unpublish-event [event]
+  (let [prior-version (read-prior-version )]))
 
 (def add-version
   (interceptor/interceptor

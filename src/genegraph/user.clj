@@ -558,15 +558,41 @@ select ?a where {
            count
            
            )))
-  
-  (->> gdm-ids
-       frequencies
-       (sort-by val)
-       reverse
-       (take 20)
-       tap>)
 
-  "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
+    (def abcd1-events
+      (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
+        (->> (event-store/event-seq r)
+             (filter #(re-find #"1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
+                               (::event/value %)))
+             (into []))))
+
+    (time
+     
+     (->> abcd1-events
+          (mapv #(-> %
+                     transform-curation-for-writer
+                     ))
+          tap>)
+
+     )
+    (def transformed-events
+      (mapv transform-curation-for-writer abcd1-events))
+
+    (->> transformed-events
+         (remove :gene-validity/change-type)
+         first
+         :gene-validity/model
+         rdf/pp-model)
+
+  
+    (->> gdm-ids
+         frequencies
+         (sort-by val)
+         reverse
+         (take 20)
+         tap>)
+
+    "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
 
   "https://search.clinicalgenome.org/kb/gene-validity/CGGV:assertion_815e0f84-b530-4fd2-81a9-02e02bf352ee-2020-12-18T050000.000Z?page=1&size=25&search="
   )

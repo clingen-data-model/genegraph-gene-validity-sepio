@@ -134,6 +134,8 @@
           :cg/UnpublisherRole)]
     res))
 
+
+
 (defn params-for-construct [event]
   (assoc construct-params
          :affiliation
@@ -143,6 +145,24 @@
          :publishTime
          (or (some-> event ::event/timestamp Instant/ofEpochMilli str)
              "2020-05-01")))
+
+
+(def gdm-query
+  (rdf/create-query "
+select ?gdm where 
+{ ?gdm a <http://dataexchange.clinicalgenome.org/gci/gdm> } "))
+
+(defn unpublish-action [gci-data params]
+  (let [gdm-id (first (gdm-query gci-data))
+        unpublish-contribution-iri (str gdm-id
+                                        "_unpublish_"
+                                        (:publishTime params))
+        affiliation (first (has-affiliation-query gci-data))]
+    (rdf/statements->model
+     [[unpublish-contribution-iri :cg/role (:publishRole params)]
+      [unpublish-contribution-iri :dc/date (:publishTime params)]
+      [unpublish-contribution-iri :cg/agent affiliation]
+      [unpublish-contribution-iri :cg/gdm gdm-id]])))
 
 (def proband-score-cap-query
   (rdf/create-query "select ?x where { ?x a :sepio/ProbandScoreCapEvidenceLine }"))
@@ -188,9 +208,14 @@
         prune-empty-evidence-lines
         prune-empty-evidence-ids)))
 
-(defn gci-data->sepio-model [gci-data params]
+
+#_(defn gci-data->sepio-model [gci-data params]
   (if (= :cg/PublisherRole (:publishRole params))
-    ))
+    (publish-action gci-data params)
+    (unpublish-action gci-data params)))
+
+(defn gci-data->sepio-model [gci-data params]
+  (publish-action gci-data params))
 
 (defn add-model-fn [event]
   (assoc event
