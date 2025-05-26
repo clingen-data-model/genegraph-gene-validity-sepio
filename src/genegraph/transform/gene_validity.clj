@@ -22,7 +22,7 @@
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
           (System/getenv "DX_JAAS_CONFIG")) ; prevent this in cloud deployments
-    {:platform "stage"
+    {:platform "prod"
      :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG")
      :local-data-path "data/"}
     {}))
@@ -41,13 +41,11 @@
     "stage" (assoc (env/build-environment "583560269534" ["dataexchange-genegraph"])
                    :version 1
                    :name "stage"
-                   :function (System/getenv "GENEGRAPH_FUNCTION")
                    :kafka-user "User:2592237"
                    :fs-handle {:type :gcs
                                :bucket "genegraph-gene-validity-sepio-stage-1"}
                    :local-data-path "/data")
     "prod" (assoc (env/build-environment "974091131481" ["dataexchange-genegraph"])
-                  :function (System/getenv "GENEGRAPH_FUNCTION")
                   :version 1
                   :name "prod"
                   :kafka-user "User:2592237"
@@ -193,14 +191,16 @@
   {:name :gene-validity-sepio
    :kafka-cluster :data-exchange
    :serialization ::rdf/n-triples
-   :kafka-topic (qualified-kafka-name "gg-gvs2")
-   :kafka-topic-config {}})
+   :kafka-topic "gene-validity-sepio"
+   :kafka-topic-config {"cleanup.policy" "compact"
+                        "delete.retention.ms" "100"}})
 
 (def gene-validity-sepio-jsonld-topic 
   {:name :gene-validity-sepio
    :kafka-cluster :data-exchange
-   :kafka-topic (qualified-kafka-name "gg-gvs2-jsonld")
-   :kafka-topic-config {}})
+   :kafka-topic "gene-validity-sepio-jsonld"
+   :kafka-topic-config {"cleanup.policy" "compact"
+                        "delete.retention.ms" "100"}})
 
 (def gv-ready-server
   {:gene-validity-server

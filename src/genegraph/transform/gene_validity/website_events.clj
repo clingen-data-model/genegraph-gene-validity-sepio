@@ -330,18 +330,19 @@ select ?x where {
    (event->website-event e)))
 
 (defn website-version-interceptor-fn [e]
-  
-  (let [website-event (event->website-event e)]
-    (-> e
-        (assoc :gene-validity/website-event website-event)
-        (event/store
-         :gene-validity-version-store
-         [::website-event
-          (get-in website-event
-                  [:references
-                   :additional_properties
-                   :genegraph_proposition_id])]
-         website-event))))
+  (if (:gene-validity/change-type e)
+    (let [website-event (event->website-event e)]
+      (-> e
+          (assoc :gene-validity/website-event website-event)
+          (event/store
+           :gene-validity-version-store
+           [::website-event
+            (get-in website-event
+                    [:references
+                     :additional_properties
+                     :genegraph_proposition_id])]
+           website-event)))
+    e))
 
 (def website-version-interceptor
   (interceptor/interceptor

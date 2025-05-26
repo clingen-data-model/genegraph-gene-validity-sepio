@@ -154,12 +154,15 @@ select ?gdm where
 
 (defn unpublish-action [gci-data params]
   (let [gdm-id (first (gdm-query gci-data))
-        unpublish-contribution-iri (str gdm-id
-                                        "_unpublish_"
-                                        (:publishTime params))
+        unpublish-contribution-iri (rdf/resource
+                                    (str gdm-id
+                                         "_unpublish_"
+                                         (:publishTime params)))
         affiliation (first (has-affiliation-query gci-data))]
     (rdf/statements->model
-     [[unpublish-contribution-iri :cg/role (:publishRole params)]
+     [[gdm-id :rdf/type :cg/EvidenceStrengthAssertion]
+      [gdm-id :cg/contributions unpublish-contribution-iri]
+      [unpublish-contribution-iri :cg/role (:publishRole params)]
       [unpublish-contribution-iri :dc/date (:publishTime params)]
       [unpublish-contribution-iri :cg/agent affiliation]
       [unpublish-contribution-iri :cg/gdm gdm-id]])))
@@ -209,12 +212,12 @@ select ?gdm where
         prune-empty-evidence-ids)))
 
 
-#_(defn gci-data->sepio-model [gci-data params]
+(defn gci-data->sepio-model [gci-data params]
   (if (= :cg/PublisherRole (:publishRole params))
     (publish-action gci-data params)
     (unpublish-action gci-data params)))
 
-(defn gci-data->sepio-model [gci-data params]
+#_(defn gci-data->sepio-model [gci-data params]
   (publish-action gci-data params))
 
 (defn add-model-fn [event]

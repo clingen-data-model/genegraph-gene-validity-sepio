@@ -25,23 +25,19 @@
 (def prop-query
   (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }" ))
 
+(def assertion-query
+  (rdf/create-query "select ?x where { ?x a :cg/EvidenceStrengthAssertion }" ))
 
 (defn record-gv-curation-fn [e]
-  (let [prop (-> e ::event/data prop-query first)
-        assertion (rdf/ld1-> prop [[:cg/subject :<]])]
-    #_(log/info :prop-id (str prop)
-              :assertion (str assertion)
-              :version (rdf/ld1-> assertion [:cg/version])
-              :sequence (rdf/ld1-> prop [[:cg/subject :<] :cg/sequence]))
-    (-> e
-        (event/store :curation-output
-                     [(str prop)
-                      (rdf/ld1-> prop [[:cg/subject :<] :cg/sequence])]
-                     (::event/data e))
-        (event/store :curation-output
-                     [(rdf/ld1-> prop [[:cg/subject :<] :cg/sequence])
-                      (str prop)]
-                     (::event/data e)))))
+  (if-let [assertion (-> e ::event/data assertion-query first)]
+    (if-let [original-version (rdf/ld1-> assertion [:dc/isVersionOf])]
+      (event/store e
+                   :curation-output
+                   [(str original-version)
+                    (str assertion)]
+                   (::event/data e))
+      e)
+    e))
 
 (def record-gv-curation
   {:name :record-gv-curation
@@ -500,7 +496,7 @@ select ?a where {
                             "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e")
 
   (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"
-                            "/Users/tristan/data/genegraph-neo/abcd1-events.edn.gz"
+                            "/Users/tristan/data/genegraph-neo/abcd1-events2.edn.gz"
                             "815e0f84-b530-4fd2-81a9-02e02bf352ee")
   
   ;; Versioning identifiers
@@ -551,13 +547,11 @@ select ?a where {
                      str))
            tap>)))
 
-    (let [es-q (rdf/create-query
+  (let [es-q (rdf/create-query
               "select ?x where { ?x a :cg/EvidenceStrengthAssertion }")]
-    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/abcd1-event"]
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/abcd1-events2.edn.gz"]
       (->> (event-store/event-seq r)
-           count
-           
-           )))
+           count)))
 
     (def abcd1-events
       (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
@@ -583,6 +577,8 @@ select ?a where {
          first
          :gene-validity/model
          rdf/pp-model)
+    
+    (tap> (mapv :gene-validity/change-type transformed-events))
 
   
     (->> gdm-ids
