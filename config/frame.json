@@ -8,7 +8,7 @@
 	"obo": "http://purl.obolibrary.org/obo/",
 	"hgnc": "https://identifiers.org/hgnc:",
 	"rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-	"cggv": "https://genegraph.clinicalgenome.org/gci/",
+	"cggv": "https://genegraph.clinicalgenome.org/r/gci/",
 	"evidenceStrength": {"@type": "@vocab"},
 	"calculatedEvidenceStrength": {"@type": "@vocab"},
 	"computedEvidenceStrength": {"@type": "@vocab"},
