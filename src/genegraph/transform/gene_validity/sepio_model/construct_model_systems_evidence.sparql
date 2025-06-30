@@ -1,6 +1,6 @@
-prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
-prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
-prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
+prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
+prefix cg: <https://genegraph.clinicalgenome.org/r/terms/>
 prefix dc: <http://purl.org/dc/terms/>
 prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 

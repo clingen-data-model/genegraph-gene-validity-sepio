@@ -1,14 +1,14 @@
 {
     "@context": {
-	"@vocab": "http://dataexchange.clinicalgenome.org/terms/",
+	"@vocab": "https://genegraph.clinicalgenome.org/r/terms/",
 	"id": "@id",
 	"type": "@type",
-	"cg": "http://dataexchange.clinicalgenome.org/terms/",
+	"cg": "https://genegraph.clinicalgenome.org/r/terms/",
 	"dc": "http://purl.org/dc/terms/",
 	"obo": "http://purl.obolibrary.org/obo/",
 	"hgnc": "https://identifiers.org/hgnc:",
 	"rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-	"cggv": "http://dataexchange.clinicalgenome.org/gci/",
+	"cggv": "https://genegraph.clinicalgenome.org/gci/",
 	"evidenceStrength": {"@type": "@vocab"},
 	"calculatedEvidenceStrength": {"@type": "@vocab"},
 	"computedEvidenceStrength": {"@type": "@vocab"},

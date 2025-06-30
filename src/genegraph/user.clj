@@ -16,7 +16,8 @@
             [hato.client :as hc]
             [clojure.data.csv :as csv]
             [clojure.java.io :as io]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [clojure.math :as math])
   (:import [ch.qos.logback.classic Logger Level]
            [org.slf4j LoggerFactory]
            [java.time Instant LocalDate ]
@@ -120,7 +121,7 @@
        count)
 
   (-> (rocksdb/range-get @(get-in test-app [:storage :curation-output :instance])
-                        "http://dataexchange.clinicalgenome.org/gci/93ab3f0b-c5e1-43be-b9ce-9236198e91c2")
+                        "https://genegraph.clinicalgenome.org/r/gci/93ab3f0b-c5e1-43be-b9ce-9236198e91c2")
        last
        rdf/to-turtle
        println)
@@ -273,7 +274,7 @@ select ?a where {
 
 (comment
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
-    (storage/read db "http://dataexchange.clinicalgenome.org/gci/01f588c4-4fef-493d-b5e0-a76fb9492244"))
+    (storage/read db "https://genegraph.clinicalgenome.org/r/gci/01f588c4-4fef-493d-b5e0-a76fb9492244"))
   )
 
 
@@ -328,9 +329,9 @@ select ?a where {
 
 (count "3e96651d-5979-416b-abc5-2e6702c35871")
 
-(count "http://dataexchange.clinicalgenome.org/gci/")
+(count "https://genegraph.clinicalgenome.org/r/gci/")
 (gci-link
- ["http://dataexchange.clinicalgenome.org/gci/3e96651d-5979-416b-abc5-2e6702c35871" nil]
+ ["https://genegraph.clinicalgenome.org/r/gci/3e96651d-5979-416b-abc5-2e6702c35871" nil]
  )
 
 
@@ -436,7 +437,7 @@ select ?a where {
 
 
 
-;; WARNING: Non well-formed subject [http://dataexchange.clinicalgenome.org/gci/FTM/Transman/Transgender Male] has been skipped.
+;; WARNING: Non well-formed subject [https://genegraph.clinicalgenome.org/r/gci/FTM/Transman/Transgender Male] has been skipped.
 
 ;; 
 
@@ -572,6 +573,26 @@ select ?a where {
     (def transformed-events
       (mapv transform-curation-for-writer abcd1-events))
 
+    (def unpulbish-query
+      (rdf/create-query "select ?x where { ?x :cg/role :cg/UnpublisherRole }"))
+
+    (->> transformed-events
+         (remove #(-> % :gene-validity/model unpulbish-query seq))
+         (mapv (fn [e]
+                 (let [a (-> e :gene-validity/model assertion-query first)
+                       app (-> e :gene-validity/model approval-date-query first)]
+                   [(rdf/curie a)
+                    (str (rdf/curie (rdf/ld1-> a [:cg/GCISnapshot]))
+                         (rdf/ld1-> app [:cg/date]))])))
+         tap>)
+
+    (-> transformed-events
+         #_(remove #(-> % :gene-validity/model unpulbish-query seq))
+         #_(mapv #(-> % :gene-validity/model assertion-query first))
+         (nth 1)
+         :gene-validity/model
+         rdf/pp-model)
+
     (->> transformed-events
          (remove :gene-validity/change-type)
          first
@@ -591,4 +612,76 @@ select ?a where {
     "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
 
   "https://search.clinicalgenome.org/kb/gene-validity/CGGV:assertion_815e0f84-b530-4fd2-81a9-02e02bf352ee-2020-12-18T050000.000Z?page=1&size=25&search="
+  )
+(comment
+  (reduce 
+   #(+
+     %1
+     (*
+      (+ 50.0  (* 11.0 80.0))
+      (math/pow 1.015 (- %2 300.0))
+      (+ 1.0  (* 33.0 0.25))
+      2.76
+      2.2))
+   0
+   (range 495 500))
+  )
+
+
+
+
+(comment
+  (-> "/Users/tristan/Downloads/gene-validity-jsonld-latest-4/cggv_fd43cf88-be31-4fe2-bd4a-7cacad12aeb0v1.0.json" slurp (json/read-str :key-fn keyword) tap>)
+  )
+
+
+(comment
+  (do
+    (def target-extensions #{".edn" ".clj" ".sparql"})
+    (def old-text "https://genegraph.clinicalgenome.org/r/")
+    (def new-text "https://genegraph.clinicalgenome.org/r/r/")
+
+    (defn has-target-extension? [file]
+      "Check if file has one of the target extensions"
+      (let [filename (.getName file)]
+        (some #(str/ends-with? filename %) target-extensions)))
+
+    (defn find-target-files [root-dir]
+      "Recursively find all files with target extensions"
+      (->> (file-seq (io/file root-dir))
+           (filter #(.isFile %))
+           (filter has-target-extension?)))
+
+    (defn replace-text-in-file [file]
+      "Replace old-text with new-text in the given file"
+      (try
+        (let [content (slurp file)
+              updated-content (str/replace content old-text new-text)]
+          (when-not (= content updated-content)
+            (spit file updated-content)
+            (println "Updated:" (.getPath file))
+            true))
+        (catch Exception e
+          (println "Error processing" (.getPath file) ":" (.getMessage e))
+          false)))
+
+    (defn process-directory [root-dir]
+      "Process all target files in the directory tree"
+      (let [files (find-target-files root-dir)
+            total-files (count files)]
+        (println "Found" total-files "files with target extensions")
+        (println "Searching for:" old-text)
+        (println "Replacing with:" new-text)
+        (println)
+        
+        (let [updated-count (->> files
+                                 (map replace-text-in-file)
+                                 (filter true?)
+                                 count)]
+          (println)
+          (println "Processing complete:")
+          (println "- Files examined:" total-files)
+          (println "- Files updated:" updated-count)))))
+
+  (process-directory "/Users/tristan/code/genegraph-gene-validity-sepio/src/")
   )

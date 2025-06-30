@@ -8,16 +8,16 @@
             [io.pedestal.interceptor :as interceptor])
   (:import [java.io ByteArrayInputStream]))
 
-(def base "http://dataexchange.clinicalgenome.org/gci/")
-(def legacy-report-base "http://dataexchange.clinicalgenome.org/gci/legacy-report_")
-(def affbase "http://dataexchange.clinicalgenome.org/agent/")
+(def base "https://genegraph.clinicalgenome.org/r/gci/")
+(def legacy-report-base "https://genegraph.clinicalgenome.org/r/gci/legacy-report_")
+(def affbase "https://genegraph.clinicalgenome.org/r/agent/")
 
-(def ns-prefixes {"dx" "http://dataexchange.clinicalgenome.org/"
+(def ns-prefixes {"dx" "https://genegraph.clinicalgenome.org/r/"
                   "sepio" "http://purl.obolibrary.org/obo/SEPIO_"
                   "hp" "http://purl.obolibrary.org/obo/HP_"
                   "dc" "http://purl.org/dc/terms/"
                   "rdfs" "http://www.w3.org/2000/01/rdf-schema#"
-                  "dxgci" "http://dataexchange.clinicalgenome.org/gci/"
+                  "dxgci" "https://genegraph.clinicalgenome.org/r/gci/"
                   "ro" "http://purl.obolibrary.org/obo/RO_"
                   "mondo" "http://purl.obolibrary.org/obo/MONDO_"
                   "car" "http://reg.genome.network/allele/"
@@ -33,16 +33,16 @@
           {"@context" 
            {
             ;; frontmatter
-            "@vocab" "http://dataexchange.clinicalgenome.org/gci/"
-            "@base" "http://dataexchange.clinicalgenome.org/gci/"
+            "@vocab" "https://genegraph.clinicalgenome.org/r/gci/"
+            "@base" "https://genegraph.clinicalgenome.org/r/gci/"
 
             "PK" "@id"
             "item_type" "@type"
             "uuid" "@id"
 
-            "gci" "http://dataexchange.clinicalgenome.org/gci/"
-            "gcixform" "http://dataexchange.clinicalgenome.org/gcixform/"
-            "cg" "http://dataexchange.clinicalgenome.org/terms/"
+            "gci" "https://genegraph.clinicalgenome.org/r/gci/"
+            "gcixform" "https://genegraph.clinicalgenome.org/r/gcixform/"
+            "cg" "https://genegraph.clinicalgenome.org/r/terms/"
 
             ;; ;; common prefixes
             "HGNC" "https://identifiers.org/hgnc:"

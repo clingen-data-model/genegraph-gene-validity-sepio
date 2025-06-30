@@ -1,5 +1,5 @@
-prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
-prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
+prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
+prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
 prefix ga4gh: <https://terms.ga4gh.org/>
 prefix skos: <http://www.w3.org/2004/02/skos/core#>
 

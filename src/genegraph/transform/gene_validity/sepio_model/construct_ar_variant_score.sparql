@@ -8,9 +8,9 @@
 
 # Will need to configure evidence line connections appropriately afterwards
 
-prefix gci: <http://dataexchange.clinicalgenome.org/gci/>
-prefix gcixform: <http://dataexchange.clinicalgenome.org/gcixform/>
-prefix cg: <http://dataexchange.clinicalgenome.org/terms/>
+prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
+prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
+prefix cg: <https://genegraph.clinicalgenome.org/r/terms/>
 construct {
   ?probandScoreEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityMaximumProbandScoreCriteria ;
