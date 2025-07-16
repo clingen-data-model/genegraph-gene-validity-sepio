@@ -2,12 +2,12 @@
 # model. It is intended to be merged into the GDM model and used as a source to derive
 # SEPIO types from information in the source model
 
-@prefix : <http://dataexchange.clinicalgenome.org/gcixform/> .
-@prefix gci: <http://dataexchange.clinicalgenome.org/gci/> .
-@prefix cg: <http://dataexchange.clinicalgenome.org/terms/> .
+@prefix : <https://genegraph.clinicalgenome.org/r/gcixform/> .
+@prefix gci: <https://genegraph.clinicalgenome.org/r/gci/> .
+@prefix cg: <https://genegraph.clinicalgenome.org/r/terms/> .
 @prefix sepio:   <http://purl.obolibrary.org/obo/SEPIO_> .
 @prefix mi:   <http://purl.obolibrary.org/obo/MI_> .
-@base <http://dataexchange.clinicalgenome.org/gcixform> .
+@base <https://genegraph.clinicalgenome.org/r/gcixform> .
 
 
 # Proband types

@@ -1,5 +1,6 @@
 (ns genegraph.user
   (:require [genegraph.transform.gene-validity :as gv]
+            [genegraph.transform.gene-validity.sepio-model :as sepio-model]
             [genegraph.transform.gene-validity.versioning :as versioning]
             [genegraph.framework.app :as app]
             [genegraph.framework.event :as event]
@@ -462,6 +463,31 @@ select ?a where {
   (assoc event ::gdm-id (gdm-id event)))
 
 
+(comment
+  (def stat3
+    (let [source-file "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
+          filter-str "0204e276-fa45-4756-a380-eb494f5237f8"]
+      (event-store/with-event-reader [r source-file]
+        (->> (event-store/event-seq r)
+             (filter #(re-find (re-pattern filter-str) (::event/value %)))
+             first))))
+
+  (-> stat3
+      transform-curation
+      :gene-validity/gci-model
+      (rdf/union sepio-model/gdm-sepio-relationships)
+      sepio-model/construct-functional-evidence
+      rdf/pp-model)
+
+  (-> stat3
+      transform-curation
+      :gene-validity/gci-model
+      rdf/pp-model)
+
+  (rdf/resource :cggv/evidenceScore)
+  
+  )
+
 
 (comment
   (do
@@ -494,11 +520,17 @@ select ?a where {
       (.setLevel (LoggerFactory/getLogger Logger/ROOT_LOGGER_NAME) Level/INFO)))
 
   #_(write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"
-                            "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e")
+                              "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e")
 
-  (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"
+  (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
                             "/Users/tristan/data/genegraph-neo/abcd1-events2.edn.gz"
                             "815e0f84-b530-4fd2-81a9-02e02bf352ee")
+
+  (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
+                            "/Users/tristan/data/genegraph-neo/gv-sepio-2025-07-02.edn.gz"
+                            "")
+
+  (+ 1 1 )
   
   ;; Versioning identifiers
   (time
@@ -516,7 +548,15 @@ select ?a where {
     (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
       (->> (event-store/event-seq r)
            (take 1)
-           (mapv #(transform-curation %)))))
+           (mapv #(transform-curation %))
+           (mapv #(-> % keys))
+           tap>)))
+
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
+    (->> (event-store/event-seq r)
+         (take 1)
+         (map #(transform-curation %))
+         (run! #(-> % :gene-validity/model rdf/pp-model))))
 
   (-> examples first :gene-validity/model rdf/pp-model)
 
@@ -541,11 +581,11 @@ select ?a where {
     (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/abcd1-events.edn.gz"]
       (->> (event-store/event-seq r)
            (mapv #(-> %
-                     event/deserialize
-                     ::event/data
-                     es-q
-                     first
-                     str))
+                      event/deserialize
+                      ::event/data
+                      es-q
+                      first
+                      str))
            tap>)))
 
   (let [es-q (rdf/create-query
@@ -554,62 +594,62 @@ select ?a where {
       (->> (event-store/event-seq r)
            count)))
 
-    (def abcd1-events
-      (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
-        (->> (event-store/event-seq r)
-             (filter #(re-find #"1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
-                               (::event/value %)))
-             (into []))))
+  (def abcd1-events
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filter #(re-find #"1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
+                             (::event/value %)))
+           (into []))))
 
-    (time
+  (time
      
-     (->> abcd1-events
-          (mapv #(-> %
-                     transform-curation-for-writer
-                     ))
-          tap>)
+   (->> abcd1-events
+        (mapv #(-> %
+                   transform-curation-for-writer
+                   ))
+        tap>)
 
-     )
-    (def transformed-events
-      (mapv transform-curation-for-writer abcd1-events))
+   )
+  (def transformed-events
+    (mapv transform-curation-for-writer abcd1-events))
 
-    (def unpulbish-query
-      (rdf/create-query "select ?x where { ?x :cg/role :cg/UnpublisherRole }"))
+  (def unpulbish-query
+    (rdf/create-query "select ?x where { ?x :cg/role :cg/UnpublisherRole }"))
 
-    (->> transformed-events
-         (remove #(-> % :gene-validity/model unpulbish-query seq))
-         (mapv (fn [e]
-                 (let [a (-> e :gene-validity/model assertion-query first)
-                       app (-> e :gene-validity/model approval-date-query first)]
-                   [(rdf/curie a)
-                    (str (rdf/curie (rdf/ld1-> a [:cg/GCISnapshot]))
-                         (rdf/ld1-> app [:cg/date]))])))
-         tap>)
+  (->> transformed-events
+       (remove #(-> % :gene-validity/model unpulbish-query seq))
+       (mapv (fn [e]
+               (let [a (-> e :gene-validity/model assertion-query first)
+                     app (-> e :gene-validity/model approval-date-query first)]
+                 [(rdf/curie a)
+                  (str (rdf/curie (rdf/ld1-> a [:cg/GCISnapshot]))
+                       (rdf/ld1-> app [:cg/date]))])))
+       tap>)
 
-    (-> transformed-events
-         #_(remove #(-> % :gene-validity/model unpulbish-query seq))
-         #_(mapv #(-> % :gene-validity/model assertion-query first))
-         (nth 1)
-         :gene-validity/model
-         rdf/pp-model)
+  (-> transformed-events
+      #_(remove #(-> % :gene-validity/model unpulbish-query seq))
+      #_(mapv #(-> % :gene-validity/model assertion-query first))
+      (nth 1)
+      :gene-validity/model
+      rdf/pp-model)
 
-    (->> transformed-events
-         (remove :gene-validity/change-type)
-         first
-         :gene-validity/model
-         rdf/pp-model)
+  (->> transformed-events
+       (remove :gene-validity/change-type)
+       first
+       :gene-validity/model
+       rdf/pp-model)
     
-    (tap> (mapv :gene-validity/change-type transformed-events))
+  (tap> (mapv :gene-validity/change-type transformed-events))
 
   
-    (->> gdm-ids
-         frequencies
-         (sort-by val)
-         reverse
-         (take 20)
-         tap>)
+  (->> gdm-ids
+       frequencies
+       (sort-by val)
+       reverse
+       (take 20)
+       tap>)
 
-    "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
+  "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
 
   "https://search.clinicalgenome.org/kb/gene-validity/CGGV:assertion_815e0f84-b530-4fd2-81a9-02e02bf352ee-2020-12-18T050000.000Z?page=1&size=25&search="
   )

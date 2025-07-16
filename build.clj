@@ -101,3 +101,6 @@
   (docker-push nil)
   (kubernetes-apply nil))
 
+(defn destroy
+  [_]
+  (process/exec {:err :stdout} "kubectl" "delete" "deployment" app-name))
