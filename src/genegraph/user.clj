@@ -495,6 +495,36 @@ select ?a where {
   )
 
 (comment
+  (def stag1
+    (let [source-file "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
+          filter-str "4f30eccd-ee01-4dc2-b656-c40caffd7c06"]
+      (event-store/with-event-reader [r source-file]
+        (->> (event-store/event-seq r)
+             (filter #(re-find (re-pattern filter-str) (::event/value %)))
+             first))))
+
+  
+  (-> stag1
+      transform-curation
+      :gene-validity/gci-model
+      (sepio-model/construct-articles {:pmbase "https://pubmed.ncbi.nlm.nih.gov/"})
+      rdf/pp-model)
+
+  (-> stag1
+      transform-curation
+      :gene-validity/gci-model
+      rdf/pp-model)
+
+    (-> stag1
+      transform-curation
+      :gene-validity/model
+      rdf/pp-model)
+
+  (rdf/resource :cggv/evidenceScore)
+  
+  )
+
+(comment
   "75516cff-17fd-47bd-8873-862b66741de2"
   (def mgme1
     (let [source-file "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
