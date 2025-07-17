@@ -81,7 +81,7 @@ where {
   # Should name it as such =tristan
   # BIND (IRI(CONCAT(str(?evidenceLine), "_proband_score_evidence_line")) AS ?probandScoreEvidenceLine) 
 
-  BIND(IF(?deNovo = "Yes", :geno/DeNovoAlleleOrigin , IF(?deNovo = "No", :geno/GermlineAlleleOrigin , :geno/AlleleOrigin ) ) AS ?alleleOrigin) .
+  BIND(IF(?deNovo = "Yes", :cg/DeNovoAlleleOrigin , IF(?deNovo = "No", :cg/GermlineAlleleOrigin , :cg/AlleleOrigin ) ) AS ?alleleOrigin) .
 
   OPTIONAL {
       ?evidenceLine gci:maternityPaternityConfirmed ?paternityMaternityConfirmed .
@@ -186,9 +186,9 @@ where {
     ?individual gci:probandIs ?semidominantZygosity .
   }
 
-  BIND(COALESCE(?semidominantZygosity, ?recessiveZygosity, :geno/Heterozygous ) AS ?zygosity) .
-  BIND(IF( ?zygosity = :geno/Homozygous , ?baseScore * 2 , ?baseScore) AS ?score) .
-  BIND(IF( ?zygosity = :geno/Homozygous , ?calculatedScore * 2 , ?calculatedScore) AS ?resultCalculatedScore) .
+  BIND(COALESCE(?semidominantZygosity, ?recessiveZygosity, :cg/Heterozygous ) AS ?zygosity) .
+  BIND(IF( ?zygosity = :cg/Homozygous , ?baseScore * 2 , ?baseScore) AS ?score) .
+  BIND(IF( ?zygosity = :cg/Homozygous , ?calculatedScore * 2 , ?calculatedScore) AS ?resultCalculatedScore) .
 
   OPTIONAL {
     ?annotation a gci:annotation ;

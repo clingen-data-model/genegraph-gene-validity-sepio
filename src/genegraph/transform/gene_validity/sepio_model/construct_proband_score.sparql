@@ -93,7 +93,7 @@ where {
       ?individual gci:denovo ?deNovo .
   }
 
-  BIND(IF(?deNovo = "Yes", :geno/DeNovoAlleleOrigin , IF(?deNovo = "No", :geno/GermlineAlleleOrigin , :geno/AlleleOrigin ) ) AS ?alleleOrigin) .
+  BIND(IF(?deNovo = "Yes", :cg/DeNovoAlleleOrigin , IF(?deNovo = "No", :cg/GermlineAlleleOrigin , :cg/AlleleOrigin ) ) AS ?alleleOrigin) .
 
   OPTIONAL {
      ?individual gci:probandIs ?probandZygosity .

@@ -101,12 +101,12 @@
 
 (def approval-activity-query
   (rdf/create-query "select ?activity where
- { ?activity :bfo/realizes  :sepio/ApproverRole }"))
+ { ?activity :bfo/realizes  :cg/Approver }"))
 
 (def assertion-query
   (rdf/create-query
    "select ?assertion where
- { ?assertion a :sepio/GeneValidityEvidenceLevelAssertion }"))
+ { ?assertion a :cg/EvidenceStrengthAssertion }"))
 
 (defn legacy-website-id
   "The website uses a version of the assertion ID that incorporates
@@ -115,7 +115,7 @@
   [model]
   (let [approval-date (some-> (approval-activity-query model)
                               first
-                              (rdf/ld1-> [:sepio/activity-date])
+                              (rdf/ld1-> [:cg/date])
                               (s/replace #":" ""))
         
         [_
@@ -130,8 +130,8 @@
 (defn publish-or-unpublish-role [event]
   (let [res
         (if (seq (is-publish-action-query (:gene-validity/gci-model event)))
-          :cg/PublisherRole
-          :cg/UnpublisherRole)]
+          :cg/Publisher
+          :cg/Unpublisher)]
     res))
 
 
@@ -168,7 +168,8 @@ select ?gdm where
       [unpublish-contribution-iri :cg/gdm gdm-id]])))
 
 (def proband-score-cap-query
-  (rdf/create-query "select ?x where { ?x a :sepio/ProbandScoreCapEvidenceLine }"))
+  (rdf/create-query "select ?x where 
+{ ?x :cg/specifiedBy :cg/GeneValidityMaximumProbandScoreCriteria }"))
 
 (defn add-proband-scores
   "Return model contributing the evidence line scores for proband scores
@@ -182,12 +183,12 @@ select ?gdm where
       (map
        #(vector 
          %
-         :sepio/evidence-line-strength-score
+         :cg/strengthScore
          (min 3                ; current cap on sop v8+ proband scores
               (reduce
                + 
-               (rdf/ld-> % [:sepio/has-evidence
-                            :sepio/evidence-line-strength-score]))))
+               (rdf/ld-> % [:cg/evidence
+                            :cg/strengthScore]))))
        proband-evidence-lines)))))
 
 (defn publish-action [gci-data params]
@@ -213,7 +214,7 @@ select ?gdm where
 
 
 (defn gci-data->sepio-model [gci-data params]
-  (if (= :cg/PublisherRole (:publishRole params))
+  (if (= :cg/Publisher (:publishRole params))
     (publish-action gci-data params)
     (unpublish-action gci-data params)))
 

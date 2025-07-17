@@ -54,7 +54,8 @@
 (def curation-output
   {:type :rocksdb
    :name :curation-output
-   :path (str (:local-data-path gv/env) "gv-curation-output")})
+   :path (str (:local-data-path gv/env) "gv-curation-output")
+   :reset-opts {}})
 
 (def test-app-def
   {:type :genegraph-app
@@ -67,7 +68,8 @@
             :gene-validity-sepio-jsonld
             {:type :simple-queue-topic
              :name :gene-validity-sepio-jsonld}}
-   :storage {:gene-validity-version-store gv/gene-validity-version-store
+   :storage {:gene-validity-version-store
+             (assoc gv/gene-validity-version-store :reset-opts {})
              :curation-output curation-output}
    :processors {:gene-validity-transform gv/transform-processor
                 :record-output-processor record-output-processor}})
@@ -97,6 +99,10 @@
   (def test-app (p/init test-app-def))
   (p/start test-app)
   (p/stop test-app)
+
+  (let [a (p/init test-app-def)]
+    (p/reset a))
+
   (.start
    (Thread.
     #(do
@@ -488,6 +494,36 @@ select ?a where {
   
   )
 
+(comment
+  "75516cff-17fd-47bd-8873-862b66741de2"
+  (def mgme1
+    (let [source-file "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
+          filter-str "75516cff-17fd-47bd-8873-862b66741de2"]
+      (event-store/with-event-reader [r source-file]
+        (->> (event-store/event-seq r)
+             (filter #(re-find (re-pattern filter-str) (::event/value %)))
+             first))))
+
+  (-> mgme1
+      transform-curation
+      :gene-validity/gci-model
+      (rdf/union sepio-model/gdm-sepio-relationships)
+      sepio-model/construct-functional-evidence
+      rdf/pp-model)
+
+  (-> mgme1
+      transform-curation
+      :gene-validity/gci-model
+      rdf/pp-model)
+
+  (-> mgme1
+      transform-curation
+      :gene-validity/model
+      rdf/pp-model)
+
+  
+  )
+
 
 (comment
   (do
@@ -525,10 +561,10 @@ select ?a where {
   (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
                             "/Users/tristan/data/genegraph-neo/abcd1-events2.edn.gz"
                             "815e0f84-b530-4fd2-81a9-02e02bf352ee")
-
-  (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
-                            "/Users/tristan/data/genegraph-neo/gv-sepio-2025-07-02.edn.gz"
-                            "")
+  (time
+   (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
+                             "/Users/tristan/data/genegraph-neo/gv-sepio-2025-07-02-fixed2.edn.gz"
+                             ""))
 
   (+ 1 1 )
   
