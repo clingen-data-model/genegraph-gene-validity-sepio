@@ -42,7 +42,7 @@
 
             "gci" "https://genegraph.clinicalgenome.org/r/gci/"
             "gcixform" "https://genegraph.clinicalgenome.org/r/gcixform/"
-            "cg" "https://genegraph.clinicalgenome.org/r/terms/"
+            "cg" "https://genegraph.clinicalgenome.org/terms/"
 
             ;; ;; common prefixes
             "HGNC" "https://identifiers.org/hgnc:"

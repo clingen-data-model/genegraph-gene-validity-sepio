@@ -3,7 +3,7 @@ prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
 prefix ga4gh: <https://terms.ga4gh.org/>
 prefix dc: <http://purl.org/dc/terms/>
 prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-prefix cg: <https://genegraph.clinicalgenome.org/r/terms/>
+prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 construct
 {
   ?scvIRI a dc:BibliographicResource ;

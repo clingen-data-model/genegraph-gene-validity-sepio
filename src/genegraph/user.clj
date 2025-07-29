@@ -744,8 +744,8 @@ select ?a where {
 (comment
   (do
     (def target-extensions #{".edn" ".clj" ".sparql"})
-    (def old-text "https://genegraph.clinicalgenome.org/r/")
-    (def new-text "https://genegraph.clinicalgenome.org/r/r/")
+    (def old-text "https://genegraph.clinicalgenome.org/r/terms/")
+    (def new-text "https://genegraph.clinicalgenome.org/terms/")
 
     (defn has-target-extension? [file]
       "Check if file has one of the target extensions"

@@ -1,6 +1,6 @@
 prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
 prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
-prefix cg: <https://genegraph.clinicalgenome.org/r/terms/> 
+prefix cg: <https://genegraph.clinicalgenome.org/terms/> 
 construct {
   ?parent cg:evidence ?child .
 }
