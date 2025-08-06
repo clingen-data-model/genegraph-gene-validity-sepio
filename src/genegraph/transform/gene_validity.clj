@@ -15,9 +15,8 @@
             [io.pedestal.http :as http]
             [clojure.java.io :as io]
             [clojure.set :as set])
+  (:import [java.time Instant])
   (:gen-class))
-
-
 
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
@@ -165,6 +164,43 @@
    {:name ::add-jsonld
     :enter (fn [e] (add-jsonld-fn e))}))
 
+(defn add-timestamp-fn [e n a]
+  (let [t (.toEpochMilli (Instant/now))]
+    (if (::timestamps e)
+      (update e ::timestamps conj {:name n
+                                   :action a
+                                   :time (.toEpochMilli (Instant/now))
+                                   :delta (- t (-> e ::timestamps last :time))})
+      (assoc e ::timestamps [{:name n
+                              :action a
+                              :time (.toEpochMilli (Instant/now))}]))))
+
+(defn add-timestamp [n]
+  (interceptor/interceptor
+   {:name n
+    :enter (fn [e] (add-timestamp-fn e n :enter))
+    :leave (fn [e] (add-timestamp-fn e n :leave))}))
+
+#_(def transform-processor
+  {:type :processor
+   :name :gene-validity-transform
+   :subscribe :gene-validity-complete
+   :backing-store :gene-validity-version-store
+   :interceptors [(add-timestamp :begin)
+                  report-transform-errors
+                  gci-model/add-gci-model
+                  (add-timestamp :gci-model)
+                  sepio-model/add-model
+                  (add-timestamp :sepio-model)
+                  versioning/add-version
+                  (add-timestamp :version)
+                  add-jsonld
+                  (add-timestamp :write-jsonld)
+                  add-iri
+                  website-event/website-version-interceptor
+                  (add-timestamp :website-version)
+                  add-publish-actions]})
+
 (def transform-processor
   {:type :processor
    :name :gene-validity-transform
@@ -228,14 +264,18 @@
             (assoc gene-validity-complete-topic
                    :type :kafka-consumer-group-topic
                    :kafka-consumer-group consumer-group
-                   :buffer-size 5)
+                   :buffer-size 5
+                   :reset-opts {})
             :gene-validity-sepio
             (assoc gene-validity-sepio-topic
-                   :type :kafka-producer-topic)
+                   :type :kafka-producer-topic
+                   :reset-opts {:clear-topic true})
             :gene-validity-sepio-jsonld
             (assoc gene-validity-sepio-jsonld-topic
-                   :type :kafka-producer-topic)}
-   :storage {:gene-validity-version-store gene-validity-version-store}
+                   :type :kafka-producer-topic
+                   :reset-opts {:clear-topic true})}
+   :storage {:gene-validity-version-store (assoc gene-validity-version-store
+                                                 :reset-opts {:destroy-snapshot true})}
    :processors {:gene-validity-transform
                 (assoc transform-processor
                        :kafka-cluster :data-exchange

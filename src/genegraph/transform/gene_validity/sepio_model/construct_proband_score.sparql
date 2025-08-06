@@ -1,5 +1,5 @@
 # Handles SOP5, SOP6 and SOP7.v1
-prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
+prefix gci: <https://genegraph.clinicalgenome.org/r/>
 prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
 prefix sepio: <http://purl.obolibrary.org/obo/SEPIO_>
 prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -42,7 +42,6 @@ construct {
   cg:phenotypes ?phenotypes ;
   dc:source ?article ;
   cg:zygosity ?probandZygosity ;
-#  :sepio/is-about-allele ?variant ; # TODO find out what this is all about
   cg:variant ?evidenceItem .
   
   ?family a cg:Family ;

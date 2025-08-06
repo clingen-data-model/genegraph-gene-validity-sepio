@@ -9,13 +9,13 @@
   (:import [java.time Instant]))
 
 (def construct-params
-  {:gcibase "https://genegraph.clinicalgenome.org/r/gci/"
-   :legacy_report_base "https://genegraph.clinicalgenome.org/r/gci/legacy-report_"
+  {:gcibase "https://genegraph.clinicalgenome.org/r/"
+   :legacy_report_base "https://genegraph.clinicalgenome.org/r/legacy-report_"
    :arbase "http://reg.genome.network/allele/"
    :cvbase "https://www.ncbi.nlm.nih.gov/clinvar/variation/"
    :scvbase "https://identifiers.org/clinvar.submission:"
    :pmbase "https://pubmed.ncbi.nlm.nih.gov/"
-   :affbase "https://genegraph.clinicalgenome.org/r/agent/"})
+   :affbase "https://genegraph.clinicalgenome.org/agent/"})
 
 (def gdm-sepio-relationships (rdf/read-rdf (str (io/resource "genegraph/transform/gene_validity/sepio_model/gdm_sepio_relationships.ttl")) :turtle))
 
@@ -36,8 +36,8 @@
                    construct-family-segregation-evidence
                    construct-evidence-connections
                    construct-alleles
-                   construct-articles
-                   construct-earliest-articles
+                   #_construct-articles
+                   #_construct-earliest-articles
                    construct-secondary-contributions
                    construct-variant-score
                    construct-ar-variant-score
@@ -53,7 +53,7 @@
 (def has-affiliation-query
   "Query that returns a curations full affiliation IRI as a Resource.
   Expects affiliations to have been preprocessed to IRIs from string form."
-  (rdf/create-query "prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
+  (rdf/create-query "prefix gci: <https://genegraph.clinicalgenome.org/r/>
                    select ?affiliationIRI where {
                      ?proposition a gci:gdm .
                      OPTIONAL {
@@ -68,7 +68,7 @@
                      ORDER BY DESC(?date) LIMIT 1"))
 
 (def is-publish-action-query
-  (rdf/create-query "prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
+  (rdf/create-query "prefix gci: <https://genegraph.clinicalgenome.org/r/>
                       select ?classification where {
                       ?classification gci:publishClassification true }" ))
 
@@ -89,8 +89,8 @@
    construct-proband-segregation-evidence
    construct-family-segregation-evidence
    construct-alleles
-   construct-articles
-   construct-earliest-articles
+   #_construct-articles
+   #_construct-earliest-articles
    construct-secondary-contributions
    construct-variant-score
    construct-ar-variant-score
@@ -150,7 +150,7 @@
 (def gdm-query
   (rdf/create-query "
 select ?gdm where 
-{ ?gdm a <https://genegraph.clinicalgenome.org/r/gci/gdm> } "))
+{ ?gdm a <https://genegraph.clinicalgenome.org/r/gdm> } "))
 
 (defn unpublish-action [gci-data params]
   (let [gdm-id (first (gdm-query gci-data))

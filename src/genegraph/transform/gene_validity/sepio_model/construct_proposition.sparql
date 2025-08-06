@@ -1,4 +1,4 @@
-prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
+prefix gci: <https://genegraph.clinicalgenome.org/r/>
 prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 prefix mondo: <http://purl.obolibrary.org/obo/MONDO_>
 prefix hp: <http://purl.obolibrary.org/obo/HP_>

@@ -8,7 +8,7 @@
 
 # Will need to configure evidence line connections appropriately afterwards
 
-prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
+prefix gci: <https://genegraph.clinicalgenome.org/r/>
 prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
 prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 construct {

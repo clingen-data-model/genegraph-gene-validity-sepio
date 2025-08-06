@@ -12,6 +12,125 @@
                    :defining-attributes
                    [:cg/gene :cg/disease :cg/modeOfInheritance]})
 
+
+;; CLASSIFICATION_CHANGE	The classification has changed as a result of this recuration
+
+(defn classification-change? [old-model new-model]
+  (let [q (rdf/create-query "select ?o where { ?a :cg/evidenceStrength ?o }")]
+    (not= (first (q old-model)) (first (q new-model)))))
+
+;; DISEASE_ID_CHANGE	The disease ontology ID has changed for this recuration
+
+(defn disease-change? [old-model new-model]
+  (let [q (rdf/create-query "select ?o where { ?a :cg/disease ?o }")]
+    (not= (first (q old-model)) (first (q new-model)))))
+
+;; MOI_CHANGE	The Mode of Inheritance has changed from the previous curation
+
+(defn moi-change? [old-model new-model]
+  (let [q (rdf/create-query "select ?o where { ?a :cg/modeOfInheritance ?o }")]
+    (not= (first (q old-model)) (first (q new-model)))))
+
+;; EXPERT_PANEL_CHANGE	Ownership of the curation has transferred to a new Expert Panel or CDWG
+
+(defn expert-panel-change? [old-model new-model]
+  (let [q (rdf/create-query "
+select ?o where {
+ ?a :cg/role :cg/Approver ;
+ :cg/agent ?o . }")]
+    (not= (first (q old-model)) (first (q new-model)))))
+
+;; SOP_CHANGE	A new SOP was used for the recuration
+
+(defn sop-change? [old-model new-model]
+  (let [q (rdf/create-query "
+select ?o where {
+ ?a a :cg/EvidenceStrengthAssertion ;
+ :cg/specifiedBy ?o . }")]
+    (not= (first (q old-model)) (first (q new-model)))))
+
+;; EVIDENCE_ADDED_CHANGE	A new evidence item was added
+
+(defn new-evidence? [old-model new-model]
+  (let [q (rdf/create-query "
+select ?o where {
+ ?e :dc/source ?o . } ")]
+    (< (count (q old-model)) (count (q new-model)))))
+
+;; SUMMARY_TEXT_CHANGE	A minor text change was mane in the Summary section
+
+(defn summary-change? [old-model new-model]
+  (let [q (rdf/create-query "
+select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")
+        summary (fn [m] (rdf/ld1-> (first (q m)) [:dc/description]))]
+    (not= (summary old-model) (summary new-model))))
+
+;; OTHER_TEXT_CHANGE	A minot text change was made in the evidence or other text sections
+
+(defn other-text-change? [old-model new-model]
+  (let [q (rdf/create-query "
+select ?o where { ?o :dc/description ?d 
+filter not exists { ?o a :cg/EvidenceStrengthAssertion } }")
+        text-elements (fn [m] (->> (q m)
+                                   (map (fn [r] [r (rdf/ld1-> r [:dc/description])]))
+                                   set))]
+    (not= (text-elements old-model) (text-elements new-model))))
+
+;; OTHER_CHANGE	A code to use where none other applies but the activity feels it is important to note the change.  This should be used sparingly.  If one or more activities has a frequent need, then a new formal change code should be added
+
+;; maybe not implemented
+
+(defn other-change? [old-model new-model]
+  false)
+
+(def change-codes
+  [{:phil-term "CLASSIFICATION-CHANGE"
+    :term :cg/classificationChange
+    :predicate classification-change?}
+   {:phil-term "MOI_CHANGE"
+    :term :cg/moiChange
+    :predicate moi-change?}
+   {:phil-term "EXPERT_PANEL_CHANGE"
+    :term :cg/expertPanelChange
+    :predicate expert-panel-change?}
+   {:phil-term "SOP_CHANGE"
+    :term :cg/sopChange
+    :predicate sop-change?}
+   {:phil-term "EVIDENCE_ADDED_CHANGE"
+    :term :cg/newEvidence
+    :predicate new-evidence?}
+   {:phil-term "SUMMARY_TEXT_CHANGE"
+    :term :cg/summaryChange
+    :predicate summary-change?}
+   {:phil-term "OTHER_TEXT_CHANGE"
+    :term :cg/otherTextChange
+    :predicate other-text-change?}])
+
+(defn changes [old-model new-model]
+  (reduce (fn [existing-changes change-code]
+            (if ((:predicate change-code) old-model new-model)
+              (conj existing-changes (:term change-code))
+              existing-changes))
+          []
+          change-codes))
+
+(defn gv-model [event]
+  (or (:gene-validity/model event)
+      (::event/data event)))
+
+(defn add-changes [event old-event]
+  #_(println "add-changes")
+  (let [old-model (gv-model old-event)
+        new-model (gv-model event)
+        change-set (changes old-model new-model)
+        q (rdf/create-query "select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")
+        assertion (-> event :gene-validity/model q first)
+        change-model (rdf/statements->model (mapv (fn [c] [assertion :cg/changes c])
+                                                  change-set))]
+    (assoc event
+           :gene-validity/changes change-set
+           :gene-validity/model (rdf/union new-model change-model))))
+
 (def prop-query
   (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }"))
 
@@ -156,7 +275,9 @@ construct {
 
 (defn add-version-map [event]
   (if-let [prior-version (read-prior-version event (::proposition-iri event))]
-    (calculate-version-given-prior-version event prior-version)
+    (-> event
+        (add-changes prior-version)
+        (calculate-version-given-prior-version prior-version))
     (assoc event :gene-validity/version {:major 1 :minor 0})))
 
 (defn add-approval-date [event]

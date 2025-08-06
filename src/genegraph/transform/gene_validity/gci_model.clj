@@ -8,16 +8,16 @@
             [io.pedestal.interceptor :as interceptor])
   (:import [java.io ByteArrayInputStream]))
 
-(def base "https://genegraph.clinicalgenome.org/r/gci/")
-(def legacy-report-base "https://genegraph.clinicalgenome.org/r/gci/legacy-report_")
-(def affbase "https://genegraph.clinicalgenome.org/r/agent/")
+(def base "https://genegraph.clinicalgenome.org/r/")
+(def legacy-report-base "https://genegraph.clinicalgenome.org/r/legacy-report_")
+(def affbase "https://genegraph.clinicalgenome.org/agent/")
 
 (def ns-prefixes {"dx" "https://genegraph.clinicalgenome.org/r/"
                   "sepio" "http://purl.obolibrary.org/obo/SEPIO_"
                   "hp" "http://purl.obolibrary.org/obo/HP_"
                   "dc" "http://purl.org/dc/terms/"
                   "rdfs" "http://www.w3.org/2000/01/rdf-schema#"
-                  "dxgci" "https://genegraph.clinicalgenome.org/r/gci/"
+                  "dxgci" "https://genegraph.clinicalgenome.org/r/"
                   "ro" "http://purl.obolibrary.org/obo/RO_"
                   "mondo" "http://purl.obolibrary.org/obo/MONDO_"
                   "car" "http://reg.genome.network/allele/"
@@ -33,14 +33,14 @@
           {"@context" 
            {
             ;; frontmatter
-            "@vocab" "https://genegraph.clinicalgenome.org/r/gci/"
-            "@base" "https://genegraph.clinicalgenome.org/r/gci/"
+            "@vocab" "https://genegraph.clinicalgenome.org/r/"
+            "@base" "https://genegraph.clinicalgenome.org/r/"
 
             "PK" "@id"
             "item_type" "@type"
             "uuid" "@id"
 
-            "gci" "https://genegraph.clinicalgenome.org/r/gci/"
+            "gci" "https://genegraph.clinicalgenome.org/r/"
             "gcixform" "https://genegraph.clinicalgenome.org/r/gcixform/"
             "cg" "https://genegraph.clinicalgenome.org/terms/"
 

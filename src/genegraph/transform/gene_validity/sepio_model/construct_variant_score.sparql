@@ -1,5 +1,5 @@
 # Handles SOP7.v2 and SOP8
-prefix gci: <https://genegraph.clinicalgenome.org/r/gci/>
+prefix gci: <https://genegraph.clinicalgenome.org/r/>
 prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
 prefix sepio: <http://purl.obolibrary.org/obo/SEPIO_>
 prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -25,6 +25,7 @@ construct {
   
 # Proband with variant evidence item
   ?individual a cg:Proband ;
+  dc:source ?article ;
   cg:allele ?variant ;
   cg:sex ?sex ;
   cg:ageUnit ?ageUnit ;

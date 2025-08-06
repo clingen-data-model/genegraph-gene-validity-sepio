@@ -99,14 +99,14 @@
      :affiliation {:affiliate_id 40021},
      :references
      {:source_uuid
-      "https://genegraph.clinicalgenome.org/r/gci/7765e2a4-19e4-4b15-9233-4847606fc501",
+      "https://genegraph.clinicalgenome.org/r/7765e2a4-19e4-4b15-9233-4847606fc501",
       :alternate_uuid
-      "https://genegraph.clinicalgenome.org/r/gci/7765e2a4-19e4-4b15-9233-4847606fc501v1.0",
+      "https://genegraph.clinicalgenome.org/r/7765e2a4-19e4-4b15-9233-4847606fc501v1.0",
       :dx_location "gene-validity-sepio",
       :additional_properties
       {:gci_snapshot_id "7765e2a4-19e4-4b15-9233-4847606fc501",
        :genegraph_proposition_id
-       "https://genegraph.clinicalgenome.org/r/gci/55ca8d81-f718-428e-ab59-75f7a9182d08"}},
+       "https://genegraph.clinicalgenome.org/r/55ca8d81-f718-428e-ab59-75f7a9182d08"}},
      :source "GENEGRAPH",
      :activity "VALIDITY",
      :workflow

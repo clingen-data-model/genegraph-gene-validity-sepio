@@ -100,6 +100,13 @@
   (p/start test-app)
   (p/stop test-app)
 
+  (defn transform-curation [e]
+    (p/process (get-in test-app [:processors :gene-validity-transform])
+               (assoc e
+                      ::event/completion-promise (promise)
+                      ::event/skip-local-effects true
+                      ::event/skip-publish-effects true)))
+  
   (let [a (p/init test-app-def)]
     (p/reset a))
 
@@ -115,12 +122,7 @@
           #_(take 5)
           (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)))))
   
-  (defn transform-curation [e]
-    (p/process (get-in test-app [:processors :gene-validity-transform])
-               (assoc e
-                      ::event/completion-promise (promise)
-                      ::event/skip-local-effects true
-                      ::event/skip-publish-effects true)))
+
 
   (/ 416130.856792 1000 60)
 
@@ -592,8 +594,8 @@ select ?a where {
                             "/Users/tristan/data/genegraph-neo/abcd1-events2.edn.gz"
                             "815e0f84-b530-4fd2-81a9-02e02bf352ee")
   (time
-   (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-02.edn.gz"
-                             "/Users/tristan/data/genegraph-neo/gv-sepio-2025-07-02-fixed2.edn.gz"
+   (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz"
+                             "/Users/tristan/data/genegraph-neo/gv-sepio-2025-07-29.edn.gz"
                              ""))
 
   (+ 1 1 )
@@ -661,26 +663,129 @@ select ?a where {
            count)))
 
   (def abcd1-events
-    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-05-21.edn.gz"]
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz"]
       (->> (event-store/event-seq r)
            (filter #(re-find #"1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
                              (::event/value %)))
            (into []))))
 
-  (time
-     
-   (->> abcd1-events
-        (mapv #(-> %
-                   transform-curation-for-writer
-                   ))
-        tap>)
+  (def abcd1-publish-events
+    (->> abcd1-events
+         (map transform-curation)
+         (remove #(-> % :gene-validity/model unpulbish-query first))
+         (into [])))
 
-   )
+  (->> abcd1-publish-events
+      (map :gene-validity/changes))
+  
+  (-> abcd1-publish-events
+      last
+      :gene-validity/model
+      rdf/pp-model)
+
+  (count abcd1-events)
+  (->> abcd1-publish-events
+       (mapv #(-> %  :gene-validity/model .size)))
+  
+  (->> abcd1-events
+       (map transform-curation)
+       (remove #(-> % :gene-validity/model unpulbish-query first))
+       (into []))
+
+  (->> abcd1-publish-events
+       consecutive-pairs
+       (mapv #(apply versioning/add-changes %))
+       (take 1)
+       (run! #(rdf/pp-model (:gene-validity/model %))))
+  
+  (let [q (rdf/create-query "select ?s where { ?a :cg/evidenceStrength ?s }")]
+    (->> abcd1-publish-events
+         (mapv #(-> % :gene-validity/model q first))))
+
+  (let [q (rdf/create-query "
+select ?o where {
+ ?a :cg/role :cg/Approver ;
+ :cg/agent ?o . }")]
+    (->> abcd1-publish-events
+         (mapv #(-> % :gene-validity/model q first))))
+
+
+  ;; This appears to be a Clojure namespace for working with gene validity data in the Genegraph system. Here's a concise overview of what this code does:
+
+  ;; ## Main Components
+
+  ;; **Data Processing Pipeline:**
+  ;; - Transforms gene validity curations from JSON to RDF/SEPIO format
+  ;; - Records curation outputs to RocksDB storage
+  ;; - Processes events from Kafka topics
+
+  ;; **Key Functions:**
+  ;; - `transform-curation` - Processes gene validity events through the transformation pipeline
+  ;; - `record-gv-curation-fn` - Stores curation outputs with versioning
+  ;; - `get-events-from-topic` - Extracts events from Kafka topics to files
+
+  ;; **Analysis Tools:**
+  ;; - GCEP productivity reporting (Q1/Q4 analysis)
+  ;; - Curation classification tracking (Limited, Moderate, Strong, Definitive)
+  ;; - Recuration analysis and trend monitoring
+
+  ;; **Data Sources:**
+  ;; - Gene validity complete events from Kafka
+  ;; - Google Sheets for affiliation data
+  ;; - Local RDF storage for versioned curations
+
+  ;; ## Comment Blocks
+
+  ;; The extensive comment blocks show:
+  ;; 1. **Development workflow** - Starting/stopping apps, processing test data
+  ;; 2. **Productivity analysis** - Generating reports on curation activities by expert panels
+  ;; 3. **Classification analysis** - Tracking changes in evidence strength over time
+  ;; 4. **Data exploration** - Examining specific curations and their transformations
+
+  ;; This appears to be a development/analysis environment for the Clinical Genome Resource (ClinGen) gene validity curation system, focusing on data transformation, quality analysis, and reporting.
+
+  ;; write clojure code that takes a sequence and transforms it into tuples of the first element paired with the next element and so ons
+
+  ;; Here's a Clojure function that creates pairs of consecutive elements:
+
+  (defn consecutive-pairs [coll]
+    (map vector coll (rest coll)))
+
+;; Usage examples:
+(consecutive-pairs [1 2 3 4 5])
+;; => ([1 2] [2 3] [3 4] [4 5])
+
+(consecutive-pairs "abcde")
+;; => ([\a \b] [\b \c] [\c \d] [\d \e])
+
+(consecutive-pairs [:a :b :c])
+;; => ([:a :b] [:b :c])
+```
+
+
+(defn consecutive-pairs [coll]
+  (partition 2 1 coll))
+
+
+;; Same results as above
+
+
+;; The `partition` version creates lazy sequences of pairs, while `map vector` creates vectors. Both work well depending on your needs.
+
+(time
+     
+ (->> abcd1-events
+      (mapv #(-> %
+                 transform-curation-for-writer
+                 ))
+      tap>)
+
+ )
   (def transformed-events
     (mapv transform-curation-for-writer abcd1-events))
 
   (def unpulbish-query
-    (rdf/create-query "select ?x where { ?x :cg/role :cg/UnpublisherRole }"))
+    (rdf/create-query "select ?x where { ?x :cg/role :cg/Unpublisher }"))
 
   (->> transformed-events
        (remove #(-> % :gene-validity/model unpulbish-query seq))
@@ -744,8 +849,8 @@ select ?a where {
 (comment
   (do
     (def target-extensions #{".edn" ".clj" ".sparql"})
-    (def old-text "https://genegraph.clinicalgenome.org/r/terms/")
-    (def new-text "https://genegraph.clinicalgenome.org/terms/")
+    (def old-text "https://genegraph.clinicalgenome.org/r/gci/")
+    (def new-text "https://genegraph.clinicalgenome.org/r/")
 
     (defn has-target-extension? [file]
       "Check if file has one of the target extensions"
@@ -790,4 +895,27 @@ select ?a where {
           (println "- Files updated:" updated-count)))))
 
   (process-directory "/Users/tristan/code/genegraph-gene-validity-sepio/src/")
+  )
+
+;; testing curation transform
+
+(comment
+  (def recent
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz"]
+      (->> (event-store/event-seq r)
+           (take-last 10)
+           (into []))))
+
+  (->> recent
+       (take-last 3)
+       (run! #(-> % transform-curation :gene-validity/model rdf/pp-model)))
+  
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz"]
+    (->> (event-store/event-seq r)
+         (take 1)
+         (map transform-curation)
+         #_(mapv ::gv/timestamps)
+         #_(run! #(-> % :gene-validity/model rdf/pp-model))
+         (run! #(-> % :gene-validity/gci-model rdf/pp-model))))
+  
   )
