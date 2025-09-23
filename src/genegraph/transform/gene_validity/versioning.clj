@@ -28,7 +28,10 @@
 ;; MOI_CHANGE	The Mode of Inheritance has changed from the previous curation
 
 (defn moi-change? [old-model new-model]
-  (let [q (rdf/create-query "select ?o where { ?a :cg/modeOfInheritance ?o }")]
+  (let [q (rdf/create-query "
+select ?o where {
+ ?a a :cg/GeneValidityProposition ;
+ :cg/modeOfInheritance ?o }")]
     (not= (first (q old-model)) (first (q new-model)))))
 
 ;; EXPERT_PANEL_CHANGE	Ownership of the curation has transferred to a new Expert Panel or CDWG
@@ -65,7 +68,7 @@ select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")
         summary (fn [m] (rdf/ld1-> (first (q m)) [:dc/description]))]
     (not= (summary old-model) (summary new-model))))
 
-;; OTHER_TEXT_CHANGE	A minot text change was made in the evidence or other text sections
+;; OTHER_TEXT_CHANGE	A minor text change was made in the evidence or other text sections
 
 (defn other-text-change? [old-model new-model]
   (let [q (rdf/create-query "

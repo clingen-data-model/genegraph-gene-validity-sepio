@@ -1,9 +1,9 @@
 {
     "@context": {
-	"@vocab": "https://genegraph.clinicalgenome.org/r/terms/",
+	"@vocab": "https://genegraph.clinicalgenome.org/terms/",
 	"id": "@id",
 	"type": "@type",
-	"cg": "https://genegraph.clinicalgenome.org/r/terms/",
+	"cg": "https://genegraph.clinicalgenome.org/terms/",
 	"dc": "http://purl.org/dc/terms/",
 	"obo": "http://purl.obolibrary.org/obo/",
 	"hgnc": "https://identifiers.org/hgnc:",

@@ -217,7 +217,7 @@ select ?act where {
 (def genegraph-reason->website-reason
   {:cg/NewCuration "NEW_CURATION"
    :cg/DiseaseNameUpdate "ADMIN_UPDATE_DISEASE_NAME"
-   :cg/ErrorClarification "ADMIN_UPDATE_OTHER"
+   :cg/ErrorClarification "ADMIN_UPDATE_ERROR_CLASS"
    :cg/RecurationCommunityRequest "RECURATION_COMMUNITY_REQUEST"
    :cg/RecurationTiming "RECURATION_TIMING"
    :cg/RecurationNewEvidence "RECURATION_NEW_EVIDENCE"

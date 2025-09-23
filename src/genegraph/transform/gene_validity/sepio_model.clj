@@ -78,7 +78,7 @@
    construct-experimental-evidence-assertions
    construct-genetic-evidence-assertion
    construct-ad-variant-assertions
-   construct-ar-variant-assertions
+   #_construct-ar-variant-assertions
    construct-cc-and-seg-assertions
    construct-proband-score
    construct-model-systems-evidence

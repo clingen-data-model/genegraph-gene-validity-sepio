@@ -100,6 +100,7 @@
   (p/start test-app)
   (p/stop test-app)
 
+
   (defn transform-curation [e]
     (p/process (get-in test-app [:processors :gene-validity-transform])
                (assoc e
@@ -560,6 +561,8 @@ select ?a where {
 (comment
   (do
     (defn transform-curation-for-writer [e]
+      (spit "/Users/tristan/Desktop/last-record.txt"
+            (::event/key e))
       (p/process (get-in test-app [:processors :gene-validity-transform])
                  (assoc e ::event/completion-promise (promise))))
 
@@ -581,6 +584,7 @@ select ?a where {
         (event-store/with-event-reader [r source-file]
           (->> (event-store/event-seq r)
                (filter #(re-find (re-pattern filter-str) (::event/value %)))
+               
                (map #(-> %
                          transform-curation-for-writer
                          sepio-publish-event))
@@ -595,7 +599,7 @@ select ?a where {
                             "815e0f84-b530-4fd2-81a9-02e02bf352ee")
   (time
    (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz"
-                             "/Users/tristan/data/genegraph-neo/gv-sepio-2025-07-29.edn.gz"
+                             "/Users/tristan/data/genegraph-neo/gv-sepio-2025-07-29-changes.edn.gz"
                              ""))
 
   (+ 1 1 )
@@ -661,6 +665,8 @@ select ?a where {
     (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/abcd1-events2.edn.gz"]
       (->> (event-store/event-seq r)
            count)))
+
+  "981c47f7-74ed-4cea-8df4-6d8df4bd0383v2.0"
 
   (def abcd1-events
     (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz"]
@@ -918,4 +924,170 @@ select ?o where {
          #_(run! #(-> % :gene-validity/model rdf/pp-model))
          (run! #(-> % :gene-validity/gci-model rdf/pp-model))))
   
+  )
+
+;; tracking down issue with errors in transform after
+;; adding changes
+(comment
+  "981c47f7-74ed-4cea-8df4-6d8df4bd0383"
+
+  (def issue1
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filter #(re-find #"981c47f7-74ed-4cea-8df4-6d8df4bd0383"
+                             (::event/value %)))
+           (into []))))
+
+  (count issue1)
+
+  (def issue1-publish-events
+    (->> issue1
+         (map transform-curation)
+         (remove #(-> % :gene-validity/model unpulbish-query first))
+         (into [])))
+
+  (def issue1-t
+    (->> issue1
+         (mapv transform-curation-for-writer)))
+
+  (->> issue1-t
+       (mapv :gene-validity/changes)
+       tap>)
+  
+  (->> issue1-t
+       (map sepio-publish-event)
+       (mapv type))
+
+
+  )
+
+(comment
+  ;; craps out on this transform 
+
+
+  (write-transformed-events "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz"
+                            "/Users/tristan/data/genegraph-neo/bad-changes.edn.gz"
+                            "f1705bb1-c435-4106-ab9b-422ff2dfe4bf")
+
+  (def bad-events
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filter #(re-find #"f1705bb1-c435-4106-ab9b-422ff2dfe4bf"
+                             (::event/value %)))
+           (into []))))
+
+  (def abcd1-publish-events
+    (->> abcd1-events
+         (map transform-curation)
+         (remove #(-> % :gene-validity/model unpulbish-query first))
+         (into [])))
+  
+  (def bad-publish-events
+    (->> bad-events
+         (map transform-curation)
+         (remove #(-> % :gene-validity/model unpulbish-query first))
+         (into [])))
+  
+  (count bad-publish-events)
+
+  ;; crashes on moi change, but likely indicates bad data
+  ;; may have been there for a while
+
+  ;; mode of inheritance is a string for families
+  ;; is an HPO  code for the proposition
+
+  ;; I suppose the question is how often this field is populated. Evidence seems to
+  ;; suggest infrequently
+
+  (-> bad-publish-events
+      (nth 2)
+      :gene-validity/model
+      rdf/pp-model)
+  
+  (->> bad-publish-events
+       consecutive-pairs
+       (mapv #(apply versioning/add-changes %))
+       (take 1)
+       (run! #(rdf/pp-model (:gene-validity/model %))))
+  
+  (+ 1 1)
+  
+  )
+
+;; exploring why json-ld output not working as expected
+(comment
+  (time
+   (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-09-11.edn.gz"]
+     (->> (event-store/event-seq r)
+          (take 1)
+          (mapv transform-curation)
+          (mapv #(dissoc % :gene-validity/gci-model :gene-validity/model))
+          (mapv #(assoc % ::json-ld-data (json/read-str (:gene-validity/json-ld %))))
+          tap>
+          #_(run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)))))
+
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-09-11.edn.gz"]
+    (->> (event-store/event-seq r)
+         (take 1)
+         (mapv transform-curation)
+         #_(mapv #(dissoc % :gene-validity/gci-model :gene-validity/model))
+         #_(mapv #(assoc % ::json-ld-data (json/read-str (:gene-validity/json-ld %))))
+         #_tap>
+         (run! #(rdf/pp-model (:gene-validity/model  %)))))
+  )
+
+
+
+;; Addressing Bradford's issues
+(comment
+  (defn get-case [c]
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-09-11.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filter #(re-find (re-pattern c) (::event/value %)))
+           last)))
+
+  (defn json-ld [e]
+    (-> e transform-curation :gene-validity/json-ld json/read-str tap>))
+
+  (defn model [e]
+    (-> e transform-curation :gene-validity/model rdf/pp-model))
+
+  (defn data [e]
+    (-> e transform-curation ::event/data tap>))
+  
+  ;; The following have no mention of probands 
+  "cggv_ffe06cdd-813b-423e-8693-bd5fcac657c2v1.0.json"
+  (def c1 (get-case "ffe06cdd-813b-423e-8693-bd5fcac657c2"))
+  "cggv_ffa85dda-7f2a-40a9-b70b-0b39cb76eb66v1.1.json"
+  "cggv_fe99572b-f026-40f1-872d-ea211f5621ccv2.0.json"
+  "cggv_fee59e53-d622-4b0f-ad94-5ca026a7cab3v1.0.json"
+  "cggv_fe16fb78-9342-40e6-9c7a-5184bdb256d3v1.0.json"
+  (json-ld c1)
+  (model c1)
+  (let [q (rdf/create-query "
+select ?x where {
+  ?x a :cg/EvidenceLine .
+  filter not exists { ?x :cg/specifiedBy ?c }
+}")]
+    (-> c1
+        transform-curation
+        :gene-validity/model
+        q))
+
+  ;; Differing dc:source
+  ;; proband id 07088...
+  "cggv_00140591-caa8-4d47-b4ca-3f0577b16d73v2.1.json"
+  (def p1 (get-case "00140591-caa8-4d47-b4ca-3f0577b16d73"))
+
+  (json-ld p1)
+  (model p1)
+  (data p1)
+  ;; proband id: cggv:2d5c3368-e5e9-45a4-b8ac-194499f5b684
+  "cggv_00cd170a-6097-4b48-9507-479b623b3be4v3.1.json"
+  ;; proband id: cggv:466c3844-39f7-4bc6-acc2-cc43af445948
+  "cggv_fffa068a-8995-4114-8302-f4530f37fe54v1.1.json"
+  ;; proband id: cggv:848e9c86-98bd-4b8e-a5e3-2d5f8eb83c89
+  "cggv_018254c5-0d85-4ccf-834e-e665dd223501v1.0.json"
+
+ 
   )

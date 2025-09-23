@@ -1,3 +1,11 @@
+prefix gci: <https://genegraph.clinicalgenome.org/r/>
+prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
+prefix sepio: <http://purl.obolibrary.org/obo/SEPIO_>
+prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+prefix cg: <https://genegraph.clinicalgenome.org/terms/>
+prefix dc: <http://purl.org/dc/terms/>
+prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
 construct {
   ?s ?p ?o .
 }
@@ -5,10 +13,15 @@ where
 {
   ?s ?p ?o .
   minus {
-    ?s a :sepio/OverallGeneticEvidenceLine .
-    [] :sepio/has-evidence ?o ;
-    a :sepio/ProbandScoreCapEvidenceLine .
-    { ?o a :sepio/NullVariantEvidenceLine . } union
-    { ?o a :sepio/NonNullVariantEvidenceLine . }
+    ?s a cg:EvidenceLine ;
+    cg:specifiedBy cg:GeneValidityOverallGeneticEvidenceCriteria ;
+    cg:evidence ?o .
+    { ?o
+      cg:specifiedBy
+      cg:GeneValidityNullVariantCriteria . }
+    union
+    { ?o
+      cg:specifiedBy
+      cg:GeneValidityNonNullVariantCriteria . }
   }
 }

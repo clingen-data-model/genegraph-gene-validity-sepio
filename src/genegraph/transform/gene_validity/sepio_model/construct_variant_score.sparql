@@ -13,6 +13,7 @@ construct {
   cg:evidence ?evidenceItem , ?functionEvidenceItem ; # evidence about variant
   cg:calculatedScore ?resultCalculatedScore ;
   cg:direction ?scoreStatus ;
+  cg:specifiedBy ?criteria ;
   dc:description ?evidenceLineDescription .
 
 # Variant evidence item
@@ -61,18 +62,23 @@ where {
   gci:affiliation ?affiliation .
   
   # maschinations due to contradicts score_status do not have gci:caseInfoType
+  # OPTIONAL {
+  #   ?evidenceLine gci:variantType ?variantType .
+  #   ?variantType gcixform:hasEvidenceLineType ?evidenceLineType ;
+  #   gcixform:hasEvidenceItemType ?evidenceItemType .
+  # }
+
   OPTIONAL {
-    ?evidenceLine gci:variantType ?variantType .
-    ?variantType gcixform:hasEvidenceLineType ?evidenceLineType ;
-    gcixform:hasEvidenceItemType ?evidenceItemType .
+    ?evidenceLine gci:variantType / gcixform:criteria ?gciCriteria .
   }
 
+  BIND(COALESCE(?gciCriteria, cg:GeneValidityUncategorizedVariantCriteria) AS ?criteria) 
 
-  # TODO -- fix this; this escaped the purge of SEPIO types
-  # NonNullVariantEvidenceLine
-  BIND(IF(BOUND(?variantType), ?evidenceLineType, sepio:0004097) AS ?lineType) .
-  # VariantEvidenceItem
-  BIND(IF(BOUND(?variantType), ?evidenceItemType, sepio:0004116) AS ?itemType) .
+  # # TODO -- fix this; this escaped the purge of SEPIO types
+  # # NonNullVariantEvidenceLine
+  # BIND(IF(BOUND(?variantType), ?evidenceLineType, sepio:0004097) AS ?lineType) .
+  # # VariantEvidenceItem
+  # BIND(IF(BOUND(?variantType), ?evidenceItemType, sepio:0004116) AS ?itemType) .
 
   OPTIONAL {
     ?evidenceLine gci:calculatedScore ?calculatedScore .

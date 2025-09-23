@@ -4,8 +4,8 @@
 
 @prefix : <https://genegraph.clinicalgenome.org/r/gcixform/> .
 @prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/> .
-@prefix gci: <https://genegraph.clinicalgenome.org/r/gci/> .
-@prefix cg: <https://genegraph.clinicalgenome.org/r/terms/> .
+@prefix gci: <https://genegraph.clinicalgenome.org/r/> .
+@prefix cg: <https://genegraph.clinicalgenome.org/terms/> .
 @prefix sepio:   <http://purl.obolibrary.org/obo/SEPIO_> .
 @prefix mi:   <http://purl.obolibrary.org/obo/MI_> .
 @base <https://genegraph.clinicalgenome.org/r/gcixform/> .
@@ -139,18 +139,12 @@ cg:GeneValidityCaseControlAggregateVariantAnalysisCriteria a cg:Criteria ;
 
 #### Segregation
 
-#### May be able to delete this ...     
-sepio:0004012 :supportingCriteriaType sepio:0000247 .
-
-
 
 #### Connections to leaf-node evidence lines
 
-# unscoreable evidence -- think about this one.
-sepio:0004002 :supportingCriteriaType sepio:0004127 .
-
 # :sepio/OverallGeneticEvidenceEvidenceLine
-cg:GeneValidityOverallGeneticEvidenceCriteria :supportingCriteriaType cg:GeneValidityNullVariantCriteria, cg:GeneValidityNonNullVariantCriteria ,  cg:GeneValidityMaximumProbandScoreCriteria, cg:GeneValidityUncategorizedProbandCriteria .
+cg:GeneValidityOverallGeneticEvidenceCriteria :supportingCriteriaType cg:GeneValidityNullVariantCriteria, cg:GeneValidityNonNullVariantCriteria ,  cg:GeneValidityMaximumProbandScoreCriteria , cg:GeneValidityUncategorizedProbandCriteria , cg:GeneValidityUncategorizedVariantCriteria ,
+cg:GeneValidityProbandARNonNullCriteria , cg:GeneValidityProbandARDeNovoNullVariantCriteria .
 
 # :sepio/AutosomalDominantOtherVariantCriterionAssessment
 cg:GeneValidityOverallAutosomalDominantOtherVariantEvidenceCriteria :supportingCriteriaType cg:GeneValidityProbandADNonNullCriteria .
@@ -161,6 +155,7 @@ cg:GeneValidityOverallAutosomalDominantNullVariantEvidenceCriteria :supportingCr
 # :sepio/AutosomalDominantDeNovoVariantCriterionAssessment
 cg:GeneValidityOverallAutosomalDominantDeNovoVariantEvidenceCriteria :supportingCriteriaType cg:GeneValidityProbandADDeNovoCriteria .
 
+# Obsolete -- remove after verification
 # :sepio/AutosomalRecessiveVariantCriterionAssessment
 cg:GeneValidityOverallAutosomalRecessiveVariantEvidenceCriteria :supportingCriteriaType cg:GeneValidityProbandARNonNullCriteria , cg:GeneValidityProbandARDeNovoNullVariantCriteria .
 
