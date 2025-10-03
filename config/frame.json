@@ -24,7 +24,13 @@
 	"direction": {"@type": "@vocab"},
 	"ageType": {"@type": "@vocab"},
 	"ageUnit": {"@type": "@vocab"},
-	"dc:source": {"@type": "@id"}
+	"dc:source": {"@type": "@id"},
+	"curationReasons": {"@type": "@vocab",
+			    "@container": "@set"},
+	"GCISnapshot": {"@type": "@id"},
+	"dc:isVersionOf": {"@type": "@id"},
+	"websiteLegacyID": {"@type": "@id"}
+	
     },
     "@type": "EvidenceStrengthAssertion"
 }
