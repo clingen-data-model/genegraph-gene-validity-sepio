@@ -1091,3 +1091,16 @@ select ?x where {
 
  
   )
+
+
+(comment
+  ;; issue with AD curations GG:c4831487-68ed-4667-95e7-2f1805817dafv1.0
+  (def gdi1 (get-case "8afc42b0-6c5e-460b-87d1-035c051fe7ca"))
+  (json-ld gdi1)
+
+  (def csf2ra (get-case "6037e055-90a1-4727-be41-fa3295982b12"))
+  (def aimp2 (get-case "ba6f8aa3-9aa9-4755-8dec-bb5c69005bbe"))
+  (json-ld aimp2)
+
+  (json-ld csf2ra)
+  )

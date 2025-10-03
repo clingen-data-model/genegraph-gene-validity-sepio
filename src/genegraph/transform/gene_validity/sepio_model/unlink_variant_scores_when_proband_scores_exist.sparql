@@ -16,6 +16,8 @@ where
     ?s a cg:EvidenceLine ;
     cg:specifiedBy cg:GeneValidityOverallGeneticEvidenceCriteria ;
     cg:evidence ?o .
+    ?pbel cg:evidence ?o ;
+    cg:specifiedBy cg:GeneValidityMaximumProbandScoreCriteria .
     { ?o
       cg:specifiedBy
       cg:GeneValidityNullVariantCriteria . }
