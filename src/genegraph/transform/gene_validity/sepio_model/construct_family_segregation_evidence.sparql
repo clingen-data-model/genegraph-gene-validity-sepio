@@ -23,8 +23,17 @@ construct {
   rdfs:label ?evidenceLabel ;
   cg:modeOfInheritance ?familyMoi ;
   cg:ethnicity ?familyEthnicity .
+
+  ?segregationEvidenceLine cg:evidence ?segregationID .
+  
 }
 where {
+  
+  ?classification a gci:provisionalClassification ;
+  gci:approvedClassification true .
+  BIND (IRI(CONCAT(str(?classification), "_seg_el")) AS ?segregationEvidenceLine) .
+
+  ################
   
   ?family a gci:family ;
   gci:segregation ?segregation ;
@@ -91,7 +100,7 @@ where {
     UNION
     { FILTER NOT EXISTS { [] gci:variantScores [] }
       ?proband gci:scores ?scores }
-    FILTER NOT EXISTS { ?scores gci:scoreStatus <http://purl.obolibrary.org/obo/SEPIO_0004585> }
+    FILTER NOT EXISTS { ?scores gci:scoreStatus <http://purl.obolibrary.org/obo/SEPIO_0004585> } # cg:Inconclusive. TODO investigate need for this
     ?scores gci:affiliation ?affiliation .
     ?scores gci:scoreStatus ?scoreStatus .
   }

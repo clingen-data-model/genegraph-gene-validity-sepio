@@ -10,7 +10,7 @@ construct
   cg:strengthScore ?caseControlTotal .
 
   ?segregationEvidenceLine a cg:EvidenceLine ;
-  cg:specifiedBy cg:GeneValiditySegregationEvidencCriteria ;
+  cg:specifiedBy cg:GeneValiditySegregationEvidenceCriteria ;
   cg:strengthScore ?segregationTotal .
   
 }

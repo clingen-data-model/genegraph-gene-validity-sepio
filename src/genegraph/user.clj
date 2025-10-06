@@ -1040,20 +1040,25 @@ select ?o where {
 
 ;; Addressing Bradford's issues
 (comment
-  (defn get-case [c]
-    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-09-11.edn.gz"]
-      (->> (event-store/event-seq r)
-           (filter #(re-find (re-pattern c) (::event/value %)))
-           last)))
+  (do
+    (defn get-case [c]
+      (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-09-11.edn.gz"]
+        (->> (event-store/event-seq r)
+             (filter #(re-find (re-pattern c) (::event/value %)))
+             last)))
 
-  (defn json-ld [e]
-    (-> e transform-curation :gene-validity/json-ld json/read-str tap>))
+    (defn json-ld [e]
+      (-> e transform-curation :gene-validity/json-ld json/read-str tap>))
 
-  (defn model [e]
-    (-> e transform-curation :gene-validity/model rdf/pp-model))
+    (defn write-json-ld [path e]
+      (spit path 
+            (-> e transform-curation :gene-validity/json-ld)))
 
-  (defn data [e]
-    (-> e transform-curation ::event/data tap>))
+    (defn model [e]
+      (-> e transform-curation :gene-validity/model rdf/pp-model))
+
+    (defn data [e]
+      (-> e transform-curation ::event/data tap>)))
   
   ;; The following have no mention of probands 
   "cggv_ffe06cdd-813b-423e-8693-bd5fcac657c2v1.0.json"
@@ -1097,7 +1102,9 @@ select ?x where {
   ;; issue with AD curations GG:c4831487-68ed-4667-95e7-2f1805817dafv1.0
   (def gdi1 (get-case "8afc42b0-6c5e-460b-87d1-035c051fe7ca"))
   (json-ld gdi1)
-
+  (data gdi1)
+  (write-json-ld "/users/tristan/Desktop/gdi1.json" gdi1)
+  
   (def csf2ra (get-case "6037e055-90a1-4727-be41-fa3295982b12"))
   (def aimp2 (get-case "ba6f8aa3-9aa9-4755-8dec-bb5c69005bbe"))
   (json-ld aimp2)

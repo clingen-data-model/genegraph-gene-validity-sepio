@@ -24,8 +24,17 @@ construct {
   rdfs:label ?evidenceLabel ;
   cg:modeOfInheritance ?familyMoi ;
   cg:ethnicity ?familyEthnicity .
+
+  ?segregationEvidenceLine cg:evidence ?segregationID .
 }
 where {
+
+  ?classification a gci:provisionalClassification ;
+  gci:approvedClassification true .
+  BIND (IRI(CONCAT(str(?classification), "_seg_el")) AS ?segregationEvidenceLine) .
+
+  ################
+  
   ?family a gci:family ;
   gci:segregation ?segregation ;
   gci:label ?evidenceLabel .
