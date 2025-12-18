@@ -2,6 +2,8 @@
   (:require [genegraph.transform.gene-validity :as gv]
             [genegraph.transform.gene-validity.sepio-model :as sepio-model]
             [genegraph.transform.gene-validity.versioning :as versioning]
+            [genegraph.transform.gene-validity.website-events :as website-events]
+            [genegraph.transform.gene-validity.event-recorder :as recorder]
             [genegraph.framework.app :as app]
             [genegraph.framework.event :as event]
             [genegraph.framework.event.store :as event-store]
@@ -1110,4 +1112,260 @@ select ?x where {
   (json-ld aimp2)
 
   (json-ld csf2ra)
+
+  
+  )
+
+;; Larry observing two mondo conditions embedded in the same curation
+(comment
+  "107f9b2d" ;; MYO1C
+  "9b0a844b-f968-48e0-8940-35584eb3454b" ;; DFNA5
+  (def myo1c (get-case "107f9b2d"))
+  (def myo1c (get-case "f27e3d88-0a3d-44f8-bbbc-1f668e596541"))
+
+  (json-ld myo1c)
+  (def myo1c-gci-model (-> myo1c transform-curation :gene-validity/gci-model))
+  (rdf/pp-model myo1c-gci-model)
+  (let [q (rdf/create-query "select ?s where { ?s ?p ?o }")]
+    (->> (q myo1c-gci-model {:o (rdf/resource
+                                 
+                                 "GG:6569447e-62f9-4d74-8224-4ecb279b7e42")})
+         (mapv #(rdf/ld-> % [:rdf/type]))))
+  (rdf/resource "GG:6569447e-62f9-4d74-8224-4ecb279b7e42")
+  (def dfna5 (get-case "9b0a844b-f968-48e0-8940-35584eb3454b"))
+
+  (def dfna5-gci-model (-> dfna5 transform-curation :gene-validity/gci-model))
+  ":gg/b73086e7-0125-406b-8baa-771292ccfdd2"
+  (rdf/pp-model dfna5-gci-model)
+  
+  (let [q (rdf/create-query "select ?s where { ?s ?p ?o }")]
+    (->> (q dfna5-gci-model {:o (rdf/resource
+                                 "GG:6569447e-62f9-4d74-8224-4ecb279b7e42"
+                                 #_"GG:b73086e7-0125-406b-8baa-771292ccfdd2")})
+         #_(mapv str)
+         (mapv #(rdf/ld-> % [:rdf/type]))))
+  (data dfna5)
+  
+  )
+
+;; finalizing versioning for gene validity
+(comment
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+    (->> (event-store/event-seq r)
+         (take 1)
+         (mapv #(-> %
+                    transform-curation
+                    
+                    (dissoc :gene-validity/model :gene-validity/gci-model)))
+         tap>))
+
+
+  ;; 36 events! Probably more noise than we want 
+  "f30149c6-d644-430b-8e4b-3c825cfdf333"
+  (def trial-set-1
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv #(re-find #"f30149c6-d644-430b-8e4b-3c825cfdf333"
+                              (::event/value %))))))
+
+  (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
+        trial-set-1)
+
+  (->> trial-set-1
+       (mapv transform-curation)
+       (remove versioning/valid-event?)
+       #_(take 1)
+       (run! #(-> % :gene-validity/model rdf/pp-model))
+       #_(mapv #(dissoc % :gene-validity/model :gene-validity/gci-model))
+       #_tap>
+       #_(mapv ::versioning/proposition-iri)
+       #_set)
+
+  (run!
+   #(storage/range-delete @(get-in test-app [:storage :gene-validity-version-store :instance]) [%])
+   #{"https://genegraph.clinicalgenome.org/r/0ed13f17-9636-4e84-b6cd-1ac51fdc5a8c" "https://genegraph.clinicalgenome.org/r/621b0c10-bab1-4848-a89e-b824479a941b" "https://genegraph.clinicalgenome.org/r/1bb8bc84-fe02-4a05-92a0-c0aacf897b6e" "https://genegraph.clinicalgenome.org/r/f30149c6-d644-430b-8e4b-3c825cfdf333" "https://genegraph.clinicalgenome.org/r/54748aa6-6bee-4fec-94e8-19b521447489" "https://genegraph.clinicalgenome.org/r/573a2983-4b49-4d67-b164-a572e0711c3d"})
+  
+
+
+  
+
+  "f31be353-ae5f-4062-85f0-607c45cc38ea"
+  (def trial-set-2
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv #(re-find #"f31be353-ae5f-4062-85f0-607c45cc38ea"
+                              (::event/value %))))))
+
+  (count trial-set-2)
+
+  (get-in test-app [:topics :gene-validity-complete])
+
+  (->> trial-set-2
+       (mapv transform-curation)
+       (mapv ::versioning/proposition-iri))
+
+  (storage/read @(get-in test-app [:storage :gene-validity-version-store :instance])
+                "https://genegraph.clinicalgenome.org/r/f31be353-ae5f-4062-85f0-607c45cc38ea")
+
+  (defn changed-elements [event]
+    (let [q (rdf/create-query "select ?x where { ?a :cg/changes ?x } ")]
+      (->> (q (:gene-validity/model event))
+           (mapv rdf/->kw))))
+
+  (->> (rocksdb/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
+                     ["https://genegraph.clinicalgenome.org/r/f31be353-ae5f-4062-85f0-607c45cc38ea"])
+       (take-last 1)
+       (run! #(-> % :gene-validity/model rdf/pp-model))
+       #_(mapv #(assoc (select-keys % [:gene-validity/approval-date
+                                       :gene-validity/version
+                                       :gene-validity/change-records])
+                       :changes (changed-elements %))))
+
+  (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
+        trial-set-2)
+  
+  (storage/range-delete @(get-in test-app [:storage :gene-validity-version-store :instance])
+                        ["https://genegraph.clinicalgenome.org/r/f31be353-ae5f-4062-85f0-607c45cc38ea"])
+
+
+  ;; Seems to be affected by non-scorable evidence -- should have that as new evidence
+  ;; Question to ask today
+
+  ;; CAT -- acatalasia
+
+  (def trial-set-3
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv #(re-find #"f1a44725-cee2-4377-9ef0-d13cc6b0af63"
+                              (::event/value %))))))
+
+  (->> (rocksdb/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
+                     ["https://genegraph.clinicalgenome.org/r/f1a44725-cee2-4377-9ef0-d13cc6b0af63"])
+       #_(take-last 1)
+       #_(run! #(-> % :gene-validity/model rdf/pp-model))
+       (mapv #(assoc (select-keys % [:gene-validity/approval-date
+                                       :gene-validity/version
+                                       :gene-validity/change-records])
+                     :changes (changed-elements %)))
+       tap>)
+
+  (count trial-set-3)
+
+  (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
+        trial-set-3)
+
+  (->> trial-set-3
+       (mapv transform-curation)
+       (mapv ::versioning/proposition-iri))
+
+  (storage/range-delete @(get-in test-app [:storage :gene-validity-version-store :instance])
+                        ["https://genegraph.clinicalgenome.org/r/f1a44725-cee2-4377-9ef0-d13cc6b0af63"])
+
+
+  "ef2d0d7a-4e5a-47ef-ab33-20dcce11e922"
+
+
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+    (->> (event-store/event-seq r)
+         (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %))))
+
+  (+ 1 1)
+
+  ;; DZIP1L -- AR polycystic kidney disease
+  (def trial-set-4
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv #(re-find #"ef2d0d7a-4e5a-47ef-ab33-20dcce11e922"
+                              (::event/value %))))))
+
+  (count trial-set-4)
+
+  (-> trial-set-4 first tap>)
+
+  (->> trial-set-4
+       (mapv transform-curation)
+       (mapv ::versioning/proposition-iri))
+
+  (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
+        trial-set-4)
+
+  (->> (rocksdb/scan @(get-in test-app [:storage
+                                        :gene-validity-version-store
+                                        :instance])
+                     [::recorder/event])
+       (take 1)
+       (map :gene-validity/model)
+       (run! rdf/pp-model))
+
+  
+
+  (->> (rocksdb/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
+                     ["https://genegraph.clinicalgenome.org/r/ef2d0d7a-4e5a-47ef-ab33-20dcce11e922"])
+       #_(take-last 1)
+       #_(run! #(-> % :gene-validity/model rdf/pp-model))
+       (mapv #(assoc (select-keys % [:gene-validity/approval-date
+                                     :gene-validity/version
+                                     :gene-validity/change-records])
+                     :changes (changed-elements %)))
+       tap>)
+  
+  (storage/range-delete @(get-in test-app [:storage :gene-validity-version-store :instance])
+                        ["https://genegraph.clinicalgenome.org/r/ef2d0d7a-4e5a-47ef-ab33-20dcce11e922"])
+
+  
+  ;; another case of conjoined (or cross-referenced) curations
+  "ec13ca39-cecd-4659-8959-fcd8278e480b"
+  (def trial-set-5
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv #(re-find #"ec13ca39-cecd-4659-8959-fcd8278e480b"
+                              (::event/value %))))))
+
+  (count trial-set-5)
+
+  (->> trial-set-5
+       (mapv transform-curation)
+       (mapv ::versioning/proposition-iri))
+
+  (run!
+   #(storage/range-delete @(get-in test-app [:storage :gene-validity-version-store :instance]) [%])
+   #{"https://genegraph.clinicalgenome.org/r/2e57707b-458d-4e8a-ac4a-d6d17b98b9e0" "https://genegraph.clinicalgenome.org/r/ec13ca39-cecd-4659-8959-fcd8278e480b" "https://genegraph.clinicalgenome.org/r/d0c3cebf-14f1-486a-b984-3a79da6ea83d"})
+
+  (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
+        trial-set-5)
+
+  (run! 
+   (fn [iri]
+     (->> (rocksdb/scan @(get-in test-app [:storage
+                                           :gene-validity-version-store
+                                           :instance])
+                        [iri])
+          #_(take-last 1)
+          #_(run! #(-> % :gene-validity/model rdf/pp-model))
+          (mapv #(assoc (select-keys % [:gene-validity/approval-date
+                                        :gene-validity/version
+                                        :gene-validity/change-records])
+                        :changes (changed-elements %)))
+          tap>))
+   #{"https://genegraph.clinicalgenome.org/r/2e57707b-458d-4e8a-ac4a-d6d17b98b9e0" "https://genegraph.clinicalgenome.org/r/ec13ca39-cecd-4659-8959-fcd8278e480b" "https://genegraph.clinicalgenome.org/r/d0c3cebf-14f1-486a-b984-3a79da6ea83d"})
+  
+  (set
+   ["https://genegraph.clinicalgenome.org/r/ec13ca39-cecd-4659-8959-fcd8278e480b" "https://genegraph.clinicalgenome.org/r/d0c3cebf-14f1-486a-b984-3a79da6ea83d" "https://genegraph.clinicalgenome.org/r/d0c3cebf-14f1-486a-b984-3a79da6ea83d" "https://genegraph.clinicalgenome.org/r/2e57707b-458d-4e8a-ac4a-d6d17b98b9e0" "https://genegraph.clinicalgenome.org/r/ec13ca39-cecd-4659-8959-fcd8278e480b" "https://genegraph.clinicalgenome.org/r/2e57707b-458d-4e8a-ac4a-d6d17b98b9e0" "https://genegraph.clinicalgenome.org/r/ec13ca39-cecd-4659-8959-fcd8278e480b" "https://genegraph.clinicalgenome.org/r/ec13ca39-cecd-4659-8959-fcd8278e480b" "https://genegraph.clinicalgenome.org/r/ec13ca39-cecd-4659-8959-fcd8278e480b"])
+  
+  
+  )
+
+;; Working on transform into all curation events
+(comment
+  (def gdi1
+    (->> (rocksdb/range-get @(get-in test-app [:storage
+                                               :gene-validity-version-store
+                                               :instance])
+                            {:prefix [::recorder/event]
+                             :return :ref})
+         (filter (fn [e]
+                   (let [data (::event/data @e)]
+                     (= "a0a9ec11-ef90-4095-9c9e-696eabd0395b"
+                        (get-in data [:resourceParent :gdm :PK])))))
+         last))
   )

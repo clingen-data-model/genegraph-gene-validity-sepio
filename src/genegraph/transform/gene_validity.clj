@@ -3,6 +3,7 @@
             [genegraph.framework.protocol :as p]
             [genegraph.framework.event :as event]
             [genegraph.framework.env :as env]
+            [genegraph.transform.gene-validity.event-recorder :as recorder]
             [genegraph.transform.gene-validity.gci-model :as gci-model]
             [genegraph.transform.gene-validity.sepio-model :as sepio-model]
             [genegraph.transform.gene-validity.versioning :as versioning]
@@ -103,7 +104,8 @@
 (def add-iri
   (interceptor/interceptor
    {:name ::add-iri
-    :enter (fn [e] (add-iri-fn e))}))
+    :enter (fn [e]
+             (add-iri-fn e))}))
 
 (defn add-publish-actions-fn [event]
   (-> event
@@ -121,7 +123,8 @@
 (def add-publish-actions
   (interceptor/interceptor
    {:name ::add-publish-actions
-    :enter (fn [e] (add-publish-actions-fn e))}))
+    :enter (fn [e]
+             (add-publish-actions-fn e))}))
 
 (defn report-transform-errors-fn [event]
   (Thread/startVirtualThread
@@ -132,9 +135,9 @@
                           :offset (::event/offset event)
                           :key (::event/key event))
        false (log/warn :fn ::report-transform-errors
-                          :msg "processing error"
-                          :offset (::event/offset event)
-                          :key (::event/key event))
+                       :msg "processing error"
+                       :offset (::event/offset event)
+                       :key (::event/key event))
        true)))
   event)
 
@@ -206,7 +209,8 @@
    :name :gene-validity-transform
    :subscribe :gene-validity-complete
    :backing-store :gene-validity-version-store
-   :interceptors [report-transform-errors
+   :interceptors [recorder/record-event
+                  report-transform-errors
                   gci-model/add-gci-model
                   sepio-model/add-model
                   versioning/add-version
@@ -220,7 +224,7 @@
    :kafka-cluster :data-exchange
    :serialization :json
    :buffer-size 5
-   :kafka-topic "gene_validity_complete"
+   :kafka-topic "gene_validity_all"
    :kafka-topic-config {}})
 
 (def gene-validity-sepio-topic 

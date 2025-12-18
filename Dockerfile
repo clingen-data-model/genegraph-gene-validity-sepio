@@ -9,7 +9,7 @@
 # RUN clojure -T:build uber
 
 # Using image without lein for deployment.
-FROM amazoncorretto:21
+FROM amazoncorretto:25
 LABEL maintainer="Tristan Nelson <thnelson@geisinger.edu>"
 
 COPY target/app.jar /app/app.jar

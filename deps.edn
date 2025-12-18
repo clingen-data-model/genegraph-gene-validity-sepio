@@ -15,17 +15,20 @@
   :build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.6"
                                                 :git/sha "8e78bcc"}}
           :ns-default build}
-  :dev {:extra-deps {djblue/portal {:mvn/version "0.58.5"}
+  :dev {:extra-deps {djblue/portal {:mvn/version "0.62.0"}
                      hato/hato {:mvn/version "1.0.0"}
                      org.clojure/data.csv {:mvn/version "1.1.0"}}
-        :jvm-opts [#_"-agentpath:/Applications/YourKit-Java-Profiler-2024.3.app/Contents/Resources/bin/mac/libyjpagent.dylib=disablestacktelemetry,exceptions=disable,delay=10000"
-                   "-XX:+UseZGC" "-XX:+ZGenerational" "-XX:MaxRAMPercentage=50"]}}
+        :jvm-opts ["-XX:+UseZGC"
+                   "--enable-native-access=ALL-UNNAMED"
+                   "-XX:MaxRAMPercentage=50"]}}
 
- :jvm-opts ["-XX:+UseZGC" "-XX:+ZGenerational" "-XX:MaxRAMPercentage=75"]
+ :jvm-opts ["-XX:+UseZGC"
+            "--enable-native-access=ALL-UNNAMED"
+            "-XX:MaxRAMPercentage=75"]
  
  :deps
  {ch.qos.logback/logback-classic                    {:mvn/version "1.5.0"}
   org.clojure/clojure                               {:mvn/version "1.12.0"}
   io.github.clingen-data-model/genegraph-framework 
-  {:git/sha "4c6397ef3858612f4701faea626fd2e55493f641"}
+  {:git/sha "80f49887646a208069a624bbf9f06ea37815d8db"}
 }}
