@@ -20,10 +20,13 @@
             [clojure.data.csv :as csv]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.math :as math])
+            [clojure.math :as math]
+            [clojure.set :as set]
+            [charred.api :as charred]
+            [clojure.walk :as walk])
   (:import [ch.qos.logback.classic Logger Level]
            [org.slf4j LoggerFactory]
-           [java.time Instant LocalDate ]
+           [java.time Instant LocalDate LocalDateTime ZoneOffset]
            [org.apache.jena.rdf.model Model Statement]))
 
 (def prop-query
@@ -196,13 +199,14 @@
   (portal/clear)
   )
 
+(+ 1 1 )
 
 (comment
   (def gv-dev (p/init gv/gv-transformer-def))
   (p/start gv-dev)
   (p/stop gv-dev)
   
-)
+  )
 
 ;; GCEP productivity report
 
@@ -1044,7 +1048,7 @@ select ?o where {
 (comment
   (do
     (defn get-case [c]
-      (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-09-11.edn.gz"]
+      (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
         (->> (event-store/event-seq r)
              (filter #(re-find (re-pattern c) (::event/value %)))
              last)))
@@ -1150,12 +1154,11 @@ select ?x where {
 
 ;; finalizing versioning for gene validity
 (comment
-  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
     (->> (event-store/event-seq r)
          (take 1)
          (mapv #(-> %
                     transform-curation
-                    
                     (dissoc :gene-validity/model :gene-validity/gci-model)))
          tap>))
 
@@ -1233,23 +1236,34 @@ select ?x where {
 
   ;; CAT -- acatalasia
 
+  ;;anchorx
+  
   (def trial-set-3
-    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
       (->> (event-store/event-seq r)
            (filterv #(re-find #"f1a44725-cee2-4377-9ef0-d13cc6b0af63"
                               (::event/value %))))))
 
+  (count trial-set-3)
+
   (->> (rocksdb/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
                      ["https://genegraph.clinicalgenome.org/r/f1a44725-cee2-4377-9ef0-d13cc6b0af63"])
-       #_(take-last 1)
+       #_(take 1)
+       (mapv website-events/add-website-event)
+       #_(mapv :gene-validity/website-event)
        #_(run! #(-> % :gene-validity/model rdf/pp-model))
-       (mapv #(assoc (select-keys % [:gene-validity/approval-date
-                                       :gene-validity/version
-                                       :gene-validity/change-records])
+       #_(mapv #(assoc (select-keys % [:gene-validity/approval-date
+                                     :gene-validity/version
+                                     :gene-validity/change-records
+                                     :gene-validity/website-event])
                      :changes (changed-elements %)))
+       (mapv :gene-validity/website-event)
        tap>)
 
-  (count trial-set-3)
+    (->> (rocksdb/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
+                     ["https://genegraph.clinicalgenome.org/r/f1a44725-cee2-4377-9ef0-d13cc6b0af63"])
+         last
+         keys)
 
   (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
         trial-set-3)
@@ -1257,6 +1271,11 @@ select ?x where {
   (->> trial-set-3
        (mapv transform-curation)
        (mapv ::versioning/proposition-iri))
+
+  (-> trial-set-3
+      last
+      transform-curation
+      keys)
 
   (storage/range-delete @(get-in test-app [:storage :gene-validity-version-store :instance])
                         ["https://genegraph.clinicalgenome.org/r/f1a44725-cee2-4377-9ef0-d13cc6b0af63"])
@@ -1273,10 +1292,17 @@ select ?x where {
 
   ;; DZIP1L -- AR polycystic kidney disease
   (def trial-set-4
-    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2025-12-09.edn.gz"]
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
       (->> (event-store/event-seq r)
            (filterv #(re-find #"ef2d0d7a-4e5a-47ef-ab33-20dcce11e922"
                               (::event/value %))))))
+
+  ;; publish all
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
+    (->> (event-store/event-seq r)
+         (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %))))
+
+  (+ 1 1 )
 
   (count trial-set-4)
 
@@ -1297,16 +1323,19 @@ select ?x where {
        (map :gene-validity/model)
        (run! rdf/pp-model))
 
+
   
 
   (->> (rocksdb/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
                      ["https://genegraph.clinicalgenome.org/r/ef2d0d7a-4e5a-47ef-ab33-20dcce11e922"])
+       (mapv website-events/add-website-event)
        #_(take-last 1)
        #_(run! #(-> % :gene-validity/model rdf/pp-model))
-       (mapv #(assoc (select-keys % [:gene-validity/approval-date
-                                     :gene-validity/version
-                                     :gene-validity/change-records])
-                     :changes (changed-elements %)))
+       #_(mapv #(assoc (select-keys % [:gene-validity/approval-date
+                                       :gene-validity/version
+                                       :gene-validity/change-records])
+                       :changes (changed-elements %)))
+       (mapv :gene-validity/website-event)
        tap>)
   
   (storage/range-delete @(get-in test-app [:storage :gene-validity-version-store :instance])
@@ -1355,8 +1384,25 @@ select ?x where {
   
   )
 
-;; Working on transform into all curation events
+;; Working on transform into updated GA4GH SEPIO
 (comment
+  (defn get-curations [c]
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv #(re-find (re-pattern c) (::event/value %))))))
+
+  (def gdi1-events
+    (get-curations "a0a9ec11-ef90-4095-9c9e-696eabd0395b"))
+
+  (def gdi1x
+    (-> gdi1-events last transform-curation))
+
+  (keys gdi1x)
+
+  (count gdi1-events)
+
+
+  
   (def gdi1
     (->> (rocksdb/range-get @(get-in test-app [:storage
                                                :gene-validity-version-store
@@ -1368,4 +1414,339 @@ select ?x where {
                      (= "a0a9ec11-ef90-4095-9c9e-696eabd0395b"
                         (get-in data [:resourceParent :gdm :PK])))))
          last))
+
+  (-> (rdf/union (:gene-validity/gci-model @gdi1)
+                 sepio-model/gdm-sepio-relationships)
+      )
+  (-> @gdi1 ::event/data tap>)
+
+
+  (->> (rocksdb/range-get @(get-in test-app [:storage
+                                             :gene-validity-version-store
+                                             :instance])
+                          {:prefix [::recorder/event]
+                           :return :ref})
+       #_(take 100)
+       (map (fn [e]
+              (let [d (::event/data @e)
+                    gdm (or (get-in d
+                                    [:properties
+                                     :resourceParent
+                                     :gdm])
+                            (get-in d
+                                    [:resourceParent
+                                     :gdm]))]
+                (or (get-in d
+                            [:properties
+                             :resourceParent
+                             :gdm])
+                    (get-in d
+                            [:resourceParent
+                             :gdm])))))
+       (mapcat (fn [gdm]
+                 (map (fn [anno]
+                        (assoc anno :gdm (or (:uuid gdm) (:PK gdm))))
+                      (filter #(seq (:experimentalData %))
+                              (:annotations gdm)))))
+       (mapcat :experimentalData)
+       #_(filter (fn [e]
+                   (let [data (::event/data @e)]
+                     (= "a0a9ec11-ef90-4095-9c9e-696eabd0395b"
+                        (get-in data [:resourceParent :gdm :PK])))))
+       last
+       tap>)
+
+  (+ 1 1)
   )
+
+
+;; q4 GV productivity report
+
+(comment
+
+  (def oct-1
+    (-> (LocalDateTime/of 2025 10 1 0 0)
+        (.toInstant ZoneOffset/UTC)
+        (.toEpochMilli)))
+  (def jan-1
+    (-> (LocalDateTime/of 2026 1 1 0 0)
+        (.toInstant ZoneOffset/UTC)
+        (.toEpochMilli)))
+
+  (def dec-23
+    (-> (LocalDateTime/of 2025 12 23 0 0)
+        (.toInstant ZoneOffset/UTC)
+        (.toEpochMilli)))
+  
+  (def dec-24
+    (-> (LocalDateTime/of 2025 12 24 0 0)
+        (.toInstant ZoneOffset/UTC)
+        (.toEpochMilli)))
+  
+  "529f9cae-ac00-47d1-94d5-52c98bf6e2a2"
+  (def scn1a
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv (fn [e]
+                      (re-find #"It was reevaluated on December 16"
+                                (::event/value e)))))))
+
+  (count scn1a)
+
+  (->> dec23-curations
+       #_(take 1)
+       (mapv transform-curation)
+       (mapv ->progress-record)
+       tap>
+       #_(mapv #(dissoc %
+                        :gene-validity/model
+                        :gene-validity/gci-model))
+       
+
+       #_(run! #(rdf/pp-model (:gene-validity/model %))))
+
+  
+  (def q4-curations
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv (fn [e]
+                      (and (< oct-1 (::event/timestamp e))
+                           (< (::event/timestamp e) jan-1)))))))
+
+  (count q4-curations)
+
+  (->> q4-curations
+       (mapv ::event/offset)
+       clojure.pprint/pprint)
+
+  (def dec23-curations
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv (fn [e]
+                      (and (< dec-23 (::event/timestamp e))
+                           (< (::event/timestamp e) dec-24)))))))
+
+
+
+
+
+  (do
+    (defn curation-reason [e]
+      (let [q (rdf/create-query "
+select ?r where {
+?x :cg/curationReasons ?r
+}")]
+        (->> (-> e :gene-validity/model q)
+             (map str)
+             set)))
+
+    (defn approval [e]
+      (let [q (rdf/create-query "
+select ?x where {
+?x :cg/activityType :cg/Evaluated ;
+}")
+            contrib (first (q (:gene-validity/model e)))]
+        (if contrib
+          {:approval-date (rdf/ld1-> contrib [:cg/date])
+           :approver (str (rdf/ld1-> contrib [:cg/contributor]))})))
+
+    (defn publish-date [e]
+      (let [q (rdf/create-query "
+select ?x where {
+?x :cg/activityType :cg/Submitted ;
+}")
+            contrib (first (q (:gene-validity/model e)))]
+        (if contrib
+          (rdf/ld1-> contrib [:cg/date])
+          nil)))
+
+    (defn secondary-contributor [e]
+      (let [q (rdf/create-query "
+select ?x where {
+?x :cg/role :cg/SecondaryContributor ;
+}")
+            contrib (first (q (:gene-validity/model e)))]
+        (if contrib
+          (str (rdf/ld1-> contrib [:cg/agent]))
+          nil)))
+
+    (defn gene [e]
+      (let [q (rdf/create-query "
+select ?x where {
+?p a :cg/GeneValidityProposition ;
+:cg/subject ?x .
+}")]
+        (some-> e :gene-validity/model q first str)))
+
+    (defn ->progress-record
+      [e]
+      (merge {:approver nil
+              :secondary-contributor (secondary-contributor e)
+              :publish-date (publish-date e)
+              :approval-date nil
+              :curation-reason (curation-reason e)
+              :gene (gene e)}
+             (approval e)))
+    
+    (def q4-curation-records
+      (->> q4-curations
+           #_(take 1)
+           (mapv transform-curation)
+           (mapv ->progress-record)
+           #_tap>
+           #_(mapv #(dissoc %
+                            :gene-validity/model
+                            :gene-validity/gci-model))
+           
+
+           #_(run! #(rdf/pp-model (:gene-validity/model %))))))
+  (def gcep-labels
+    (with-open [r (io/reader "/Users/tristan/Downloads/affils.json.txt")]
+      (->> (charred/read-json r :key-fn keyword)
+           (mapv (fn [x] [(str "https://genegraph.clinicalgenome.org/agent/"
+                               (:affiliation_id x))
+                          (:affiliation_fullname x)]))
+           (into {}))))
+
+  (defn add-labels [r]
+    (assoc r
+           :approver-name (gcep-labels (:approver r))
+           :secondary-contributor-name (gcep-labels (:secondary-contributor r))))
+
+  (defn new-curation? [r]
+    (get
+     (:curation-reason r)
+     "https://genegraph.clinicalgenome.org/terms/NewCuration"))
+
+  (defn recuration? [r]
+    (let [recuration-type
+          #{"https://genegraph.clinicalgenome.org/terms/RecurationTiming"
+            "https://genegraph.clinicalgenome.org/terms/RecurationFrameworkChange"
+            "https://genegraph.clinicalgenome.org/terms/RecurationErrorAffectingScoreorClassification"
+            "https://genegraph.clinicalgenome.org/terms/RecurationNewEvidence"}]
+      (seq (set/intersection (:curation-reason r) recuration-type))))
+
+  {"https://genegraph.clinicalgenome.org/terms/NewCuration" 44,
+   "https://genegraph.clinicalgenome.org/terms/ErrorClarification" 126,
+   "https://genegraph.clinicalgenome.org/terms/RecurationTiming" 30,
+   nil 25,
+   "https://genegraph.clinicalgenome.org/terms/RecurationErrorAffectingScoreorClassification" 3
+   "https://genegraph.clinicalgenome.org/terms/RecurationNewEvidence" 10,
+   "https://genegraph.clinicalgenome.org/terms/RecurationFrameworkChange" 1}
+
+  (->> q4-curation-records
+       (filter #(= "https://genegraph.clinicalgenome.org/agent/10005"
+                   (:approver %)))
+       #_(filter :publish-date)
+       (mapv add-labels)
+       tap>)
+
+  (tap> gcep-labels)
+
+  (defn inc-new [counts]
+    (if counts
+      (update counts :new inc)
+      {:new 1 :recuration 0 :secondary 0}))
+
+  (defn inc-recuration [counts]
+    (if counts
+      (update counts :recuration inc)
+      {:new 0 :recuration 1 :secondary 0}))
+
+  (defn inc-secondary [counts]
+    (if counts
+      (update counts :secondary inc)
+      {:new 0 :recuration 0 :secondary 1}))
+
+  (tap>
+   (set/rename-keys
+    (reduce
+     (fn [m r]
+       (let [m1 (cond
+                  (new-curation? r) (update m (:approver r) inc-new)
+                  (recuration? r) (update m (:approver r) inc-recuration)
+                  :default m)]
+         (if (and (:secondary-contributor r)
+                  (or (new-curation? r) (recuration? r)))
+           (update m1 (:secondary-contributor r) inc-secondary)
+           m1)))
+     {}
+     q4-curation-records)
+    gcep-labels))
+
+  (with-open [w (io/writer "/Users/tristan/Desktop/gcep-report.csv")]
+    (->>
+     (set/rename-keys
+      (reduce
+       (fn [m r]
+         (let [m1 (cond
+                    (new-curation? r) (update m (:approver r) inc-new)
+                    (recuration? r) (update m (:approver r) inc-recuration)
+                    :default m)]
+           (if (and (:secondary-contributor r)
+                    (or (new-curation? r) (recuration? r)))
+             (update m1 (:secondary-contributor r) inc-secondary)
+             m1)))
+       {}
+       q4-curation-records)
+      gcep-labels)
+     (mapv (fn [[k {:keys [new recuration secondary]}]]
+             [k new recuration secondary]))
+     (cons ["Expert Panel" "New Curations" "Recurations" "Secondary Contributions"])
+     (charred/write-csv w)))
+  
+  (count q4-curation-records)
+  )
+
+;; Picking out a few examples for discussion
+(comment
+  (->> (rocksdb/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
+                     ["https://genegraph.clinicalgenome.org/r/ef2d0d7a-4e5a-47ef-ab33-20dcce11e922"])
+       (mapv website-events/add-website-event)
+       #_(take-last 1)
+       #_(run! #(-> % :gene-validity/model rdf/pp-model))
+       #_(mapv #(assoc (select-keys % [:gene-validity/approval-date
+                                       :gene-validity/version
+                                       :gene-validity/change-records])
+                       :changes (changed-elements %)))
+       (mapv :gene-validity/website-event)
+       tap>)
+  "http://localhost:8080/#/r/GG%3Ac16423b1-2353-475c-a43e-987a46fa1f00v1.13" ;;zeb2
+  (defn tap-history
+    [iri]
+    (->> (rocksdb/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
+                       [iri])
+         (mapv website-events/add-website-event)
+         #_(take-last 1)
+         #_(run! #(-> % :gene-validity/model rdf/pp-model))
+         #_(mapv #(assoc (select-keys % [:gene-validity/approval-date
+                                         :gene-validity/version
+                                         :gene-validity/change-records])
+                         :changes (changed-elements %)))
+         (mapv :gene-validity/website-event)
+         tap>))
+
+  (tap-history "https://genegraph.clinicalgenome.org/r/c16423b1-2353-475c-a43e-987a46fa1f00") ;; zeb2
+
+  (tap-history "https://genegraph.clinicalgenome.org/r/b372c7f6-bbac-488a-812a-0d27002e88a2") ;; just v1 of
+
+  (tap-history "https://genegraph.clinicalgenome.org/r/b1958371-3f4a-43a3-b110-8451cab9de91")
+
+  ;; affiliate_id -> string
+
+
+  (* 1545 0.20)
+  )
+
+
+;; putting together GV versioning set for Phil
+(comment
+  (->> (rocksdb/range-get @(get-in test-app [:storage
+                                             :gene-validity-version-store
+                                             :instance])
+                          {:prefix [::recorder/event]
+                           :return :ref})
+       (take 1)
+       #_(mapv #(-> % deref keys))
+       (mapv #(-> % deref website-events/add-website-event :gene-validity/website-event))
+       tap>))

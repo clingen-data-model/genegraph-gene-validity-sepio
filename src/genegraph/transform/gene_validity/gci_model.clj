@@ -214,13 +214,13 @@
             "Weeks gestation" "cg:WeeksGestation"
             "Years" "cg:Years"
 
-            ;; Consider revisiting this part of the model
+            ;; updated to reflect values in current SEPIO/VA
             ;; scoreStatus
-            "Contradicts" "cg:Contradicts"
-            "Review" "cg:Inconclusive"
+            "Contradicts" "cg:Disputes"
+            "Review" "cg:Neutral"
             "Score" "cg:Supports"
             "Supports" "cg:Supports"
-            "none" "cg:Inconclusive"
+            "none" "cg:Neutral"
 
             ;; testingMethods
             ;; "Chromosomal microarray" "http://purl.obolibrary.org/obo/SEPIO_0004591"

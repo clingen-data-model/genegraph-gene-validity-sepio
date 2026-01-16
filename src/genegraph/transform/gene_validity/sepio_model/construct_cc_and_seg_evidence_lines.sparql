@@ -1,0 +1,34 @@
+prefix gci: <https://genegraph.clinicalgenome.org/r/>
+prefix cg: <https://genegraph.clinicalgenome.org/terms/>
+
+construct
+{
+  ?geneticEvidenceLine cg:hasEvidenceItems ?caseControlEvidenceLine , ?segregationEvidenceLine .
+
+  ?caseControlEvidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy cg:GeneValidityOverallCaseControlEvidenceCriteria ;
+  cg:score ?caseControlTotal .
+
+  ?segregationEvidenceLine a cg:EvidenceLine ;
+  cg:specifiedBy cg:GeneValiditySegregationEvidenceCriteria ;
+  cg:score ?segregationTotal .
+  
+}
+where
+{
+
+  ?classification a gci:provisionalClassification ;
+  gci:classificationPoints ?pointsTree ;
+  gci:approvedClassification true .
+
+  BIND (IRI(CONCAT(str(?classification), "_overall_genetic_evidence_line")) AS ?geneticEvidenceLine) .
+  
+  ?pointsTree gci:segregation ?segregationTree .
+  ?segregationTree gci:pointsCounted ?segregationTotal .
+
+  ?pointsTree gci:caseControl ?caseControlTree .
+  ?caseControlTree gci:pointsCounted ?caseControlTotal .
+
+  BIND (IRI(CONCAT(str(?classification), "_cc_el")) AS ?caseControlEvidenceLine) .
+  BIND (IRI(CONCAT(str(?classification), "_seg_el")) AS ?segregationEvidenceLine) .
+}

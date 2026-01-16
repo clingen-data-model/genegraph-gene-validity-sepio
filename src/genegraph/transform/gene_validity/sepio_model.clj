@@ -19,19 +19,19 @@
 
 (def gdm-sepio-relationships (rdf/read-rdf (str (io/resource "genegraph/transform/gene_validity/sepio_model/gdm_sepio_relationships.ttl")) :turtle))
 
-(rdf/declare-query construct-proposition ;done
-                   construct-evidence-level-assertion ;done
-                   construct-experimental-evidence-assertions ;done
-                   construct-genetic-evidence-assertion
-                   construct-ad-variant-assertions
-                   construct-ar-variant-assertions
-                   construct-cc-and-seg-assertions
-                   construct-proband-score
-                   construct-model-systems-evidence
-                   construct-functional-alteration-evidence
-                   construct-functional-evidence
-                   construct-rescue-evidence
-                   construct-case-control-evidence
+(rdf/declare-query construct-proposition ; done
+                   construct-statement ; done 
+                   construct-experimental-evidence-lines ; done
+                   construct-genetic-evidence-line ; done
+                   construct-ad-variant-evidence-lines ; TODO
+                   construct-ar-variant-assertions ; TODO
+                   construct-cc-and-seg-evidence-lines ; done
+                   construct-proband-score ;TODO
+                   construct-model-systems-evidence ; -> StudyResult
+                   construct-functional-alteration-evidence ; -> StudyResult
+                   construct-functional-evidence ; -> StudyResult
+                   construct-rescue-evidence ; -> StudyResult
+                   construct-case-control-evidence ; -> StudyResult
                    construct-proband-segregation-evidence
                    construct-family-segregation-evidence
                    construct-evidence-connections
@@ -74,12 +74,13 @@
 
 (def initial-construct-queries
   [construct-proposition
-   construct-evidence-level-assertion
-   construct-experimental-evidence-assertions
-   construct-genetic-evidence-assertion
-   construct-ad-variant-assertions
+;;   construct-evidence-level-assertion
+   construct-statement
+   construct-experimental-evidence-lines
+   construct-genetic-evidence-line
+   construct-ad-variant-evidence-lines
    #_construct-ar-variant-assertions
-   construct-cc-and-seg-assertions
+   construct-cc-and-seg-evidence-lines
    construct-proband-score
    construct-model-systems-evidence
    construct-functional-alteration-evidence
@@ -231,3 +232,17 @@ select ?gdm where
   (interceptor/interceptor
    {:name ::add-model
     :enter (fn [e] (add-model-fn e))}))
+
+(comment
+  (-> (rdf/union (:gene-validity/gci-model @genegraph.user/gdi1)
+                 gdm-sepio-relationships)
+      #_construct-statement
+      construct-family-segregation-evidence
+      rdf/pp-model)
+
+  (-> (rdf/union (:gene-validity/gci-model genegraph.user/gdi1x)
+                 gdm-sepio-relationships)
+      construct-statement
+      construct-family-segregation-evidence
+      rdf/pp-model)
+  )

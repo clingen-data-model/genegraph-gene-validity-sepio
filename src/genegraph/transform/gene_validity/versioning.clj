@@ -10,14 +10,14 @@
 
 (id/register-type {:type :cg/GeneValidityProposition
                    :defining-attributes
-                   [:cg/gene :cg/disease :cg/modeOfInheritance]})
+                   [:cg/subject :cg/object :cg/qualifier :cg/predicate]})
 
 (defn as-query [query]
   (if (string? query) (rdf/create-query query) query))
 
 (defn summary-change-record [old-model new-model]
   (let [q (rdf/create-query "
-select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")
+select ?o where { ?o a :cg/Statement . }")
         summary (fn [m] (rdf/ld1-> (first (q m)) [:dc/description]))
         old-summary (summary old-model)
         new-summary (summary new-model)]
@@ -51,29 +51,29 @@ select ?o where {
 
 (defn summary-query [m]
   (let [q (rdf/create-query "
-select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")]
+select ?o where { ?o a :cg/Statement . }")]
     (rdf/ld-> (first (q m)) [:dc/description])))
 
 (def change-record-list
   [{:change-type :cg/classificationChange
-    :query "select ?o where { ?a :cg/evidenceStrength ?o }"
+    :query "select ?o where { ?a :cg/classification ?o }"
     :required true}
    {:change-type :cg/diseaseIDChange
-    :query "select ?o where { ?a :cg/disease ?o }"
+    :query "select ?o where { ?a a :cg/GeneValidityProposition ; :cg/object ?o }"
     :required true}
    {:change-type :cg/MOIChange
     :query "select ?o where {
  ?a a :cg/GeneValidityProposition ;
- :cg/modeOfInheritance ?o }"
+ :cg/qualifier ?o }"
     :required true}
    {:change-type :cg/expertPanelChange
     :query "select ?o where {
- ?a :cg/role :cg/Approver ;
- :cg/agent ?o . }"
+ ?a :cg/activityType :cg/Evaluated ;
+ :cg/contributor ?o . }"
     :required true}
    {:change-type :cg/SOPChange
     :query "select ?o where {
- ?a a :cg/EvidenceStrengthAssertion ;
+ ?a a :cg/Statement ;
  :cg/specifiedBy ?o . }"
     :required true}
    {:change-type :cg/summaryChange
@@ -110,13 +110,13 @@ select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")]
 ;; CLASSIFICATION_CHANGE	The classification has changed as a result of this recuration
 
 (defn classification-change? [old-model new-model]
-  (let [q (rdf/create-query "select ?o where { ?a :cg/evidenceStrength ?o }")]
+  (let [q (rdf/create-query "select ?o where { ?a :cg/classification ?o }")]
     (not= (first (q old-model)) (first (q new-model)))))
 
 ;; DISEASE_ID_CHANGE	The disease ontology ID has changed for this recuration
 
 (defn disease-change? [old-model new-model]
-  (let [q (rdf/create-query "select ?o where { ?a :cg/disease ?o }")]
+  (let [q (rdf/create-query "select ?o where { ?a a :cg/GeneValidityProposition ; :cg/object ?o }")]
     (not= (first (q old-model)) (first (q new-model)))))
 
 ;; MOI_CHANGE	The Mode of Inheritance has changed from the previous curation
@@ -125,7 +125,7 @@ select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")]
   (let [q (rdf/create-query "
 select ?o where {
  ?a a :cg/GeneValidityProposition ;
- :cg/modeOfInheritance ?o }")]
+ :cg/qualifier ?o }")]
     (not= (first (q old-model)) (first (q new-model)))))
 
 ;; EXPERT_PANEL_CHANGE	Ownership of the curation has transferred to a new Expert Panel or CDWG
@@ -133,8 +133,8 @@ select ?o where {
 (defn expert-panel-change? [old-model new-model]
   (let [q (rdf/create-query "
 select ?o where {
- ?a :cg/role :cg/Approver ;
- :cg/agent ?o . }")]
+ ?a :cg/activityType :cg/Evaluated ;
+ :cg/contributor ?o . }")]
     (not= (first (q old-model)) (first (q new-model)))))
 
 ;; SOP_CHANGE	A new SOP was used for the recuration
@@ -142,7 +142,7 @@ select ?o where {
 (defn sop-change? [old-model new-model]
   (let [q (rdf/create-query "
 select ?o where {
- ?a a :cg/EvidenceStrengthAssertion ;
+ ?a a :cg/Statement ;
  :cg/specifiedBy ?o . }")]
     (not= (first (q old-model)) (first (q new-model)))))
 
@@ -160,7 +160,7 @@ select ?o where {
 
 (defn summary-change? [old-model new-model]
   (let [q (rdf/create-query "
-select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")
+select ?o where { ?o a :cg/Statement . }")
         summary (fn [m] (rdf/ld1-> (first (q m)) [:dc/description]))]
     (not= (summary old-model) (summary new-model))))
 
@@ -172,7 +172,7 @@ select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")
 (defn other-text-change? [old-model new-model]
   (let [q (rdf/create-query "
 select ?o where { ?o :dc/description ?d 
-filter not exists { ?o a :cg/EvidenceStrengthAssertion } }")
+filter not exists { ?o a :cg/Statement } }")
         text-elements (fn [m] (->> (q m)
                                    (map (fn [r] [r (rdf/ld1-> r [:dc/description])]))
                                    set))]
@@ -264,7 +264,7 @@ filter not exists { ?o a :cg/EvidenceStrengthAssertion } }")
   (let [old-model (gv-model old-event)
         new-model (gv-model event)
         change-set (changes old-model new-model)
-        q (rdf/create-query "select ?o where { ?o a :cg/EvidenceStrengthAssertion . }")
+        q (rdf/create-query "select ?o where { ?o a :cg/Statement . }")
         assertion (-> event :gene-validity/model q first)
         records (change-records old-model new-model)
         records-model (change-records->model assertion records)
@@ -282,9 +282,10 @@ filter not exists { ?o a :cg/EvidenceStrengthAssertion } }")
   (let [prop (first (prop-query model))]
     (id/iri
      {:type :cg/GeneValidityProposition
-      :cg/gene (str (rdf/ld1-> prop [:cg/gene]))
-      :cg/disease (str (rdf/ld1-> prop [:cg/disease]))
-      :cg/modeOfInheritance (str (rdf/ld1-> prop [:cg/modeOfInheritance]))})))
+      :cg/subject (str (rdf/ld1-> prop [:cg/subject]))
+      :cg/object (str (rdf/ld1-> prop [:cg/object]))
+      :cg/qualifier (str (rdf/ld1-> prop [:cg/qualifier]))
+      :cg/predicate (str (rdf/ld1-> prop [:cg/predicate]))})))
 
 (def rename-proposition-query
   (rdf/create-query "
@@ -319,20 +320,20 @@ construct {
 
 (def activity-with-role
   (rdf/create-query "select ?activity where
-{ ?activity :cg/role ?role }"))
+{ ?activity :cg/activityType ?role }"))
 
 (def curation-reasons
   (rdf/create-query "select ?reasons where
 { ?curation :cg/curationReasons ?reasons }"))
 
 (def publish-actions
-  (rdf/create-query "select ?x where { ?x :cg/role :cg/Publisher } "))
+  (rdf/create-query "select ?x where { ?x :cg/activityType :cg/Submitted } "))
 
 (defn has-publish-action [m]
   (seq (publish-actions m)))
 
 (defn approval-date [model]
-  (some-> (activity-with-role model {:role :cg/Approver})
+  (some-> (activity-with-role model {:role :cg/Submitted})
           first
           (rdf/ld1-> [:cg/date])))
 
@@ -440,7 +441,7 @@ construct {
          (approval-date (:gene-validity/model event))))
 
 (def assertion-iri
-  (rdf/create-query "select ?x where { ?x a :cg/EvidenceStrengthAssertion }"))
+  (rdf/create-query "select ?x where { ?x a :cg/Statement }"))
 
 (def construct-versioned-model
   (rdf/create-query "
@@ -454,12 +455,12 @@ construct {
 
 } where {
  { ?s ?p ?o .
-   FILTER NOT EXISTS { ?s a :cg/EvidenceStrengthAssertion . } 
+   FILTER NOT EXISTS { ?s a :cg/Statement . } 
  }
  union 
  {
   ?s1 ?p1 ?o1 .
-  ?s1 a :cg/EvidenceStrengthAssertion .
+  ?s1 a :cg/Statement .
  }
 }
 "))
@@ -497,14 +498,16 @@ construct {
              str)))
 
 (defn calculate-version [event]
-  (let [event-with-approval-date (add-approval-date event)] 
+  (let [event-with-approval-date (add-approval-date event)]
     (if (and (has-publish-action (:gene-validity/model event))
              (:gene-validity/approval-date event-with-approval-date))
-      (-> event-with-approval-date
-          add-prop-iri
-          add-version-map
-          store-this-version
-          add-versioned-model)
+      (do
+        (tap> (::event/key event))
+        (-> event-with-approval-date
+            add-prop-iri
+            add-version-map
+            store-this-version
+            add-versioned-model))
       event-with-approval-date)))
 
 #_(defn update-unpublish-event [event]
