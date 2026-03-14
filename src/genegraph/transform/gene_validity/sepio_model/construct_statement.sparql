@@ -8,6 +8,7 @@ construct {
   
   ?classification a cg:Statement ;
   cg:proposition ?proposition ;
+  dc:isVersionOf ?proposition ;
   cg:subject ?hgnc ;
   cg:classification ?evidencelevel ;
   cg:contributions ?contribution , ?publishContribution ;

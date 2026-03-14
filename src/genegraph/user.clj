@@ -1,6 +1,7 @@
 (ns genegraph.user
   (:require [genegraph.transform.gene-validity :as gv]
             [genegraph.transform.gene-validity.sepio-model :as sepio-model]
+            [genegraph.transform.gene-validity.gci-model :as gci-model]
             [genegraph.transform.gene-validity.versioning :as versioning]
             [genegraph.transform.gene-validity.website-events :as website-events]
             [genegraph.transform.gene-validity.event-recorder :as recorder]
@@ -12,6 +13,7 @@
             [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.storage.rocksdb :as rocksdb]
             [genegraph.framework.storage :as storage]
+            [genegraph.framework.processor :as processor]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
             [portal.api :as portal]
@@ -27,7 +29,9 @@
   (:import [ch.qos.logback.classic Logger Level]
            [org.slf4j LoggerFactory]
            [java.time Instant LocalDate LocalDateTime ZoneOffset]
-           [org.apache.jena.rdf.model Model Statement]))
+           [org.apache.jena.rdf.model Model Statement]
+           [java.util.concurrent ThreadPoolExecutor SynchronousQueue TimeUnit
+            ThreadPoolExecutor$CallerRunsPolicy Semaphore]))
 
 (def prop-query
   (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }" ))
@@ -97,7 +101,6 @@
         (LocalDate/now)
         ".edn.gz"))
   (.setLevel (LoggerFactory/getLogger Logger/ROOT_LOGGER_NAME) Level/INFO))
-
 (comment
   (.setLevel (LoggerFactory/getLogger Logger/ROOT_LOGGER_NAME) Level/INFO)
 
@@ -1738,15 +1741,249 @@ select ?x where {
   (* 1545 0.20)
   )
 
+(defn version-key [event]
+  (let [q (rdf/create-query "
+select ?x where { 
+?s a :cg/Statement ;
+  :dc/isVersionOf ?x .
+}")]
+    (some-> event :gene-validity/model q first str)))
 
 ;; putting together GV versioning set for Phil
 (comment
-  (->> (rocksdb/range-get @(get-in test-app [:storage
-                                             :gene-validity-version-store
-                                             :instance])
-                          {:prefix [::recorder/event]
-                           :return :ref})
-       (take 1)
-       #_(mapv #(-> % deref keys))
-       (mapv #(-> % deref website-events/add-website-event :gene-validity/website-event))
-       tap>))
+  (let [version-store @(get-in test-app [:storage
+                                         :gene-validity-version-store
+                                         :instance])]
+    (->> (rocksdb/range-get version-store
+                            {:prefix [::recorder/event]
+                             :return :ref})
+         (take-last 1)
+         (map #(assoc-in (deref %)
+                         [::storage/storage :gene-validity-version-store]
+                         version-store))
+         #_(mapv #(-> % deref keys))
+         #_(mapv #(-> % website-events/add-website-event :gene-validity/website-event))
+         #_tap>
+         (run! #(-> %  :gene-validity/model rdf/pp-model))))
+
+
+  (let [version-store @(get-in test-app [:storage
+                                         :gene-validity-version-store
+                                         :instance])]
+    (->> (rocksdb/range-get version-store
+                            {:prefix [::recorder/event]
+                             :return :ref})
+         (take-last 1)
+         (map #(assoc-in (deref %)
+                         [::storage/storage :gene-validity-version-store]
+                         version-store))
+         (mapv #(-> % keys))
+         #_(mapv #(-> % website-events/add-website-event :gene-validity/website-event))
+         tap>
+         #_(run! #(-> % deref :gene-validity/model rdf/pp-model))))
+
+  ;; Seed with initial events
+  (time
+   (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-01-05.edn.gz"]
+     (let [version-store @(get-in test-app [:storage
+                                            :gene-validity-version-store
+                                            :instance])]
+
+       (->> (event-store/event-seq r)
+            (run! (fn [e]
+                    (storage/write version-store
+                                   [:events (::event/offset e)]
+                                   e)))))))
+  ;; set up threadpool 
+  (def tp (ThreadPoolExecutor. 30
+                               30
+                               1
+                               TimeUnit/MINUTES
+                               (SynchronousQueue. true)
+                               (ThreadPoolExecutor$CallerRunsPolicy.)))
+  (.close tp) ;; clean up after
+  
+  ;; Update and write events for model
+  (time
+   (let [version-store @(get-in test-app [:storage
+                                          :gene-validity-version-store
+                                          :instance])]
+     (->> (rocksdb/range-get version-store
+                             {:prefix [:events]
+                              :return :ref})
+          (run! (fn [e]
+                  (.execute tp (fn []
+                                 (let [evt @e]
+                                   (storage/write version-store
+                                                  [:events (::event/offset evt)]
+                                                  (-> evt
+                                                      event/deserialize
+                                                      gci-model/add-gci-model-fn
+                                                      sepio-model/add-model-fn))))))))))
+
+  ;; clear index for keys/offsets
+  (let [version-store @(get-in test-app [:storage
+                                         :gene-validity-version-store
+                                         :instance])]
+    (storage/range-delete version-store [:offsets]))
+
+  ;; validate index clear
+  (let [version-store @(get-in test-app [:storage
+                                         :gene-validity-version-store
+                                         :instance])]
+    (->> (rocksdb/range-get version-store
+                            {:prefix [:offsets]})
+         count))
+  
+
+  ;; build index for keys/offsets
+  (time
+   (let [version-store @(get-in test-app [:storage
+                                          :gene-validity-version-store
+                                          :instance])]
+     (loop [events (into clojure.lang.PersistentQueue/EMPTY
+                         (rocksdb/range-get version-store
+                                            {:prefix [:events]
+                                             :return :ref}))
+            locks {}
+            keys []]
+       (if-let [eref (peek events)]
+         (let [e @eref
+               k (version-key e)
+               s (get locks k (Semaphore. 1 true))]
+           (.execute tp
+                     (fn []
+                       (.acquire s)
+                       (try
+                         (let [o (::event/offset e)
+                               offsets (storage/read version-store [:offsets k])
+                               offset-list (if (= ::storage/miss offsets)
+                                             [o]
+                                             (conj offsets o))]
+                           (storage/write version-store [:offsets k] offset-list))
+                         (catch Exception e (log/error :k k))
+                         (finally (.release s)))))
+           (recur (pop events) (assoc locks k s) (conj keys k)))
+         keys))))
+
+  ;; check for a bunch of nil keys at the begining
+  (let [version-store @(get-in test-app [:storage
+                                         :gene-validity-version-store
+                                         :instance])]
+    (->> (rocksdb/range-get version-store
+                            {:prefix [:offsets]})
+         (map count)
+         sort
+         reverse
+         first))
+
+
+  (let [version-store @(get-in test-app [:storage
+                                         :gene-validity-version-store
+                                         :instance])]
+    (->> (rocksdb/range-get version-store
+                            {:prefix [:offsets]})
+         (sort-by count)
+         reverse
+         first
+         sort
+         (take 1)
+         (mapv #(storage/read version-store [:events %]))
+         (run! #(rdf/pp-model (:gene-validity/model %)))
+         tap>))
+
+
+  (let [version-store @(get-in test-app [:storage
+                                         :gene-validity-version-store
+                                         :instance])]
+    (->> (rocksdb/range-get version-store
+                            {:prefix [:offsets]})
+         (sort-by count)
+         reverse
+         first))
+
+  
+
+  
+  
+
+  )
+
+;; Getting back into it 2026-01-30
+(comment
+  ;; check for prior versions
+  (time
+   (let [version-store @(get-in test-app [:storage
+                                          :gene-validity-version-store
+                                          :instance])]
+     (->> (rocksdb/range-get version-store
+                             {:prefix [::versioning/prior-version]
+                              :return :ref})
+          (take 1)
+          (mapv deref)
+          tap>)))
+
+  ;; clear prior versions
+  (time
+   (let [version-store @(get-in test-app [:storage
+                                          :gene-validity-version-store
+                                          :instance])]
+     (storage/range-delete
+      version-store
+      [::versioning/prior-version])
+     (storage/range-delete
+      version-store
+      [::website-events/website-event])))
+
+  
+
+  (time
+   (let [version-store @(get-in test-app [:storage
+                                          :gene-validity-version-store
+                                          :instance])]
+     (->> (rocksdb/range-get version-store
+                             {:prefix [::versioning/prior-version]
+                              :return :ref})
+          (take 1)
+          (mapv deref)
+          tap>)))
+
+  ;; Try to add versioning 
+  (time
+   (let [version-store @(get-in test-app [:storage
+                                          :gene-validity-version-store
+                                          :instance])]
+     (->> (rocksdb/range-get version-store
+                             {:prefix [:events]
+                              :return :ref})
+          (take 1)
+          #_(mapv (fn [e]
+                    (let [evt @e]
+                      (-> evt
+                          (assoc-in [::storage/storage :gene-validity-version-store]
+                                    version-store)
+                          versioning/calculate-version
+                          (dissoc ::storage/storage)
+                          (update-vals type)))))
+          #_tap>
+          (run! (fn [e]
+                  (let [evt @e
+                        versioned (-> evt
+                                      (assoc-in [::storage/storage :gene-validity-version-store]
+                                                version-store)
+                                      versioning/calculate-version)]
+                      (storage/write version-store
+                                     [:events (::event/offset evt)]
+                                     (-> evt
+                                         (assoc-in [::storage/storage :gene-validity-version-store]
+                                                   version-store)
+                                         versioning/calculate-version
+                                         (dissoc ::storage/storage ::event/effects)))))))))
+  (+ 1 1)
+
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-02-26.edn.gz"]
+    (->> (event-store/event-seq r)
+         (take-last 1)
+         (mapv event/deserialize)
+         tap>))
+  )

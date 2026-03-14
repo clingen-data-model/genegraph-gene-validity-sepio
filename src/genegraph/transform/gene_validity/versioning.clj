@@ -397,10 +397,11 @@ construct {
                       :gene-validity/website-event])]
     (-> event
         (event/store :gene-validity-version-store
-                     (::proposition-iri event)
+                     [::last-version (::proposition-iri event)]
                      event-elements-to-store)
         (event/store :gene-validity-version-store
-                     [(::proposition-iri event)
+                     [::last-version
+                      (::proposition-iri event)
                       (:gene-validity/version event)]
                      event-elements-to-store))))
 
@@ -421,7 +422,7 @@ construct {
 (defn read-prior-version [event gdm-iri]
   (let [prior-version
         (storage/read (get-in event [::storage/storage :gene-validity-version-store])
-                      gdm-iri)]
+                      [::prior-version gdm-iri])]
     (if (= ::storage/miss prior-version)
       nil
       prior-version)))

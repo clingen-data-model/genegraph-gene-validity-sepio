@@ -3,6 +3,7 @@
   (:require [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.event :as event]
             [genegraph.framework.storage :as storage]
+            [genegraph.transform.gene-validity.versioning :as versioning]
             [io.pedestal.log :as log]
             [io.pedestal.interceptor :as interceptor]
             [clojure.java.io :as io]
@@ -226,7 +227,7 @@ select ?act where {
    :cg/RecurationErrorAffectingScoreorClassification "RECURATION_ERROR_SCORE_CLASS"
    :cg/RecurationDiscrepancyResolution "RECURATION_DISCREPANCY_RESOLUTION"})
 
-(defn curation-reasons [assertion version]
+#_(defn curation-reasons [assertion version]
   (let [gci-reasons (rdf/ld-> assertion [:cg/curationReasons])]
     (if (seq gci-reasons)
       (mapv #(-> % rdf/->kw (genegraph-reason->website-reason "ADMIN_UPDATE_OTHER"))
@@ -235,6 +236,18 @@ select ?act where {
         (and (= 1 (:major version))
              (= 0 (:minor version))) ["NEW_CURATION"]
         (= 0 (:minor version)) ["RECURATION_GENEGRAPH_CALCULATED"]
+        :else ["ADMIN_UPDATE_GENEGRAPH_CALCULATED"]))))
+
+(defn curation-reasons [assertion version]
+  (let [gci-reasons (rdf/ld-> assertion [:cg/curationReasons])
+        [_ major minor] (re-find #"^(\d+)\.(\d+)" version)]
+    (if (seq gci-reasons)
+      (mapv #(-> % rdf/->kw (genegraph-reason->website-reason "ADMIN_UPDATE_OTHER"))
+            gci-reasons)
+      (cond
+        (and (= "1" major)
+             (= "0" minor)) ["NEW_CURATION"]
+        (= "0" minor) ["RECURATION_GENEGRAPH_CALCULATED"]
         :else ["ADMIN_UPDATE_GENEGRAPH_CALCULATED"]))))
 
 (defn affiliation-number [curation-model]
@@ -255,11 +268,12 @@ select ?x where {
 (defn get-previous-version [event]
   (storage/read
    (get-in event [::storage/storage :gene-validity-version-store])
-   (-> event
-       :gene-validity/model
-       proposition-query
-       first
-       str)))
+   [::versioning/prior-version
+    (-> event
+        :gene-validity/model
+        proposition-query
+        first
+        str)]))
 
 (defn get-previous-website-event [event]
   (storage/read
@@ -291,10 +305,18 @@ select ?x where {
    :from previousVersion
    :to currentVersion})
 
+(defn version-query [event]
+  (let [q (rdf/create-query "
+select ?x where { ?x a :cg/Statement . }")
+        s (first (q (:gene-validity/model event)))]
+    (if s
+      (rdf/ld1-> s [:cg/version])
+      "0.0.0")))
+
 (defn event->base-event [event]
   (let [curation-model (:gene-validity/model event)
         assertion (first (assertion-query curation-model))
-        version (version-string (:gene-validity/version event))
+        version (version-query event)
         snapshot-id (str (rdf/ld1-> assertion [:cg/GCISnapshot]))]
     {:schema_version "1.0"
      :event_subtype "CURATION"
@@ -317,8 +339,8 @@ select ?x where {
      :affiliation {:affiliate_id (affiliation-number curation-model)}
      :version {:display version
                :internal version
-               :reasons (curation-reasons assertion
-                                          (:gene-validity/version event))
+               :reasons (curation-reasons assertion version
+                                          #_(:gene-validity/version event))
                :changes (mapv ->website-change (:gene-validity/change-records event))
                :description (rdf/ld1-> assertion [:cg/curationReasonDescription])}}))
 
