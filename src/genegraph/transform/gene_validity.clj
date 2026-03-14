@@ -13,7 +13,6 @@
             [genegraph.framework.storage :as storage]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
-            [io.pedestal.http :as http]
             [clojure.java.io :as io]
             [clojure.set :as set])
   (:import [java.time Instant])
@@ -246,20 +245,14 @@
   {:gene-validity-server
    {:type :http-server
     :name :gv-ready-server
-    ::http/host "0.0.0.0"
-    ::http/allowed-origins {:allowed-origins (constantly true)
-                            :creds true}
-    ::http/routes
+    :routes
     [["/ready"
       :get (fn [_] {:status 200 :body "server is ready"})
       :route-name ::readiness]
      ["/live"
       :get (fn [_] {:status 200 :body "server is live"})
       :route-name ::liveness]]
-    ::http/type :jetty
-    ::http/port 8888
-    ::http/join? false
-    ::http/secure-headers nil}})
+    :port 8888}})
 
 (def gv-transformer-def
   {:type :genegraph-app
