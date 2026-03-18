@@ -182,7 +182,7 @@ select ?gdm where
       [gdm-id :cg/contributions unpublish-contribution-iri]
       [gdm-id :dc/isVersionOf gdm-id]
       [unpublish-contribution-iri :cg/activityType :cg/Unpublished]
-      [unpublish-contribution-iri :dc/date (:publishTime params)]
+      [unpublish-contribution-iri :cg/date (:publishTime params)]
       [unpublish-contribution-iri :cg/contributor affiliation]
       [unpublish-contribution-iri :cg/gdm gdm-id]])))
 

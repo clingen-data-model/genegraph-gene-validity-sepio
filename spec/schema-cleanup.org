@@ -1,0 +1,170 @@
+* Schema Cleanup: Residual Old Class/Property Names
+
+This document tracks locations where pre-migration class and property names remain
+in the codebase following the transition to the updated SEPIO/GA4GH GKS model. Items
+are grouped by the term being replaced and annotated with severity.
+
+** Term Mapping Reference
+
+| Old term                    | New term              | Kind     |
+|-----------------------------+-----------------------+----------|
+| =cg:EvidenceStrengthAssertion= | =cg:Statement=        | Class    |
+| =bfo:realizes=              | =cg:activityType=     | Property |
+| =cg:Approver=               | =cg:Evaluated=        | Instance |
+| =cg:Publisher=              | =cg:Submitted=        | Instance |
+| =cg:Unpublisher=            | =cg:Unpublished=      | Instance |
+| =cg:role=                   | =cg:activityType=     | Property |
+| =cg:agent=                  | =cg:contributor=      | Property |
+
+** Production Code (Active Bugs)
+
+These are in active production interceptors or SPARQL files and will produce
+incorrect output or silently fail.
+
+*** =gene_validity.clj= line 99 — =add-iri-fn=
+
+#+begin_src clojure
+(prop-query (:gene-validity/model event) {:type :cg/EvidenceStrengthAssertion})
+#+end_src
+
+The query will match nothing in the new model (all assertions are now =cg:Statement=),
+causing =::event/iri= to be set to an empty string. This is the Kafka message key and
+the IRI used for compaction — a broken IRI here affects all downstream consumers.
+
+Fix: change =:cg/EvidenceStrengthAssertion= → =:cg/Statement=.
+
+*** =sepio_model.clj= lines 104–105 — =approval-activity-query=
+
+#+begin_src clojure
+(rdf/create-query "select ?activity where
+ { ?activity :bfo/realizes  :cg/Approver }")
+#+end_src
+
+Uses two old terms. This query is run on the partially-constructed SEPIO model inside
+=legacy-website-id=, which now uses =cg:activityType= / =cg:Evaluated=. Will find
+nothing, causing the approval date component of the legacy website ID to be nil.
+
+Fix: change to =?activity :cg/activityType :cg/Evaluated=.
+
+*** =sepio_model.clj= lines 108–110 — =assertion-query=
+
+#+begin_src clojure
+(rdf/create-query
+ "select ?assertion where
+{ ?assertion a :cg/EvidenceStrengthAssertion }")
+#+end_src
+
+Also used inside =legacy-website-id=. Will find nothing in the new model, causing the
+entire legacy ID to be nil.
+
+Fix: change =:cg/EvidenceStrengthAssertion= → =:cg/Statement=.
+
+*** =add_legacy_website_id.sparql= line 4
+
+#+begin_src sparql
+where
+{ ?assertion a :cg/EvidenceStrengthAssertion }
+#+end_src
+
+The SPARQL CONSTRUCT will match no assertions and emit no triples, silently dropping
+the =cg:websiteLegacyID= annotation from every published record.
+
+Fix: change =:cg/EvidenceStrengthAssertion= → =:cg/Statement=.
+
+*** =validation.clj= line 9 — =disconnected-evidence-lines-query=
+
+#+begin_src sparql
+?el a :cg/EvidenceLine .
+?a a :cg/EvidenceStrengthAssertion .
+filter not exists {
+?a :cg/evidence * ?el .
+}
+#+end_src
+
+The validation check anchors on =cg:EvidenceStrengthAssertion=, which no longer
+exists. The query will always return an empty result set, making the check always
+pass regardless of actual model structure.
+
+Fix: change =:cg/EvidenceStrengthAssertion= → =:cg/Statement=.
+
+*** =website_events.clj= lines 366 and 375 — =unpublish-event->website-event= / =event->website-event=
+
+#+begin_src clojure
+;; line 366
+(activity-date (:gene-validity/model event) :cg/Unpublisher)
+;; line 375
+(if (activity-date (:gene-validity/model event) :cg/Unpublisher)
+#+end_src
+
+=activity-date= queries on =cg:activityType=. The new unpublish model uses
+=:cg/Unpublished= as the activity type (see =sepio_model.clj= line 184 and
+=unpublish_evidence_level_assertion.sparql= line 15). Using =:cg/Unpublisher= will
+always return nil, so unpublish events will never be detected and
+=unpublish-event->website-event= will never be invoked.
+
+Fix: change =:cg/Unpublisher= → =:cg/Unpublished= at both locations.
+
+** Internal Logic (Non-RDF, Lower Severity)
+
+These old terms are used as internal Clojure-level control flow values rather than
+being emitted into the RDF model. They do not cause incorrect triples but are
+confusing and inconsistent with the rest of the updated code.
+
+*** =sepio_model.clj= lines 131–136 — =publish-or-unpublish-role= and =params-for-construct=
+
+#+begin_src clojure
+(if (seq (is-publish-action-query (:gene-validity/gci-model event)))
+  :cg/Publisher
+  :cg/Unpublisher)
+#+end_src
+
+These values feed =:publishRole= in =params-for-construct= and are used only in
+=gci-data->sepio-model= to branch between =publish-action= and =unpublish-action=.
+They are not emitted as RDF. However, the names are misleading post-migration since
+the role model has changed.
+
+Fix: consider replacing with plain keywords (e.g., =:publish= / =:unpublish=) to
+avoid implying these are RDF terms, or update to the new activity type names for
+consistency.
+
+** Files to Delete
+
+*** =unpublish_evidence_level_assertion.sparql=
+
+Already annotated with =# NOT USED -- should delete after verification= at line 1.
+The file has already been updated to use new terms (=cg:Statement=, =cg:Unpublished=)
+but is no longer referenced in the query pipeline. Safe to delete after confirming no
+remaining references.
+
+** Dev/REPL Code (=user.clj=)
+
+These will not affect production output but will silently return empty results during
+REPL-based development and exploration. Worth updating to avoid confusion.
+
+| Line(s) | Old term(s) used                                  |
+|---------+---------------------------------------------------|
+| 40      | =:cg/EvidenceStrengthAssertion=                   |
+| 262     | =:cg/EvidenceStrengthAssertion=                   |
+| 265–266 | =:cg/role :cg/Approver=, =:cg/agent=              |
+| 305     | =:cg/EvidenceStrengthAssertion=                   |
+| 310     | =:cg/role :cg/Approver=                           |
+| 318     | =:cg/role :cg/Publisher=                          |
+| 661     | =:cg/EvidenceStrengthAssertion=                   |
+| 673     | =:cg/EvidenceStrengthAssertion=                   |
+| 722–723 | =:cg/role :cg/Approver=, =:cg/agent=              |
+| 803     | =:cg/role :cg/Unpublisher=                        |
+| 1569    | =:cg/role :cg/SecondaryContributor=, =:cg/agent=  |
+
+Note: lines 1549 and 1559 in =user.clj= already use the correct new terms
+(=:cg/activityType :cg/Evaluated= and =:cg/Submitted=).
+
+** Comment Blocks
+
+*** =website_events.clj= line 590
+
+Inside a =(comment ...)= block. Not executed, but will mislead future readers.
+
+#+begin_src clojure
+(rdf/create-query "select ?x where
+{ ?x a :cg/EvidenceStrengthAssertion }")]
+#+end_src

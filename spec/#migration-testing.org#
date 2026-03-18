@@ -1,0 +1,409 @@
+* Migration Testing Plan
+
+Interactive REPL-based test strategy for validating schema migration changes
+incrementally during development and comprehensively before release. All code
+is intended to live in =genegraph.user= or a new =genegraph.migration-test= namespace.
+
+** Design Principles
+
+- Tests run against real transformed events, not mocks
+- Incremental: run a small, curated sample while making changes; switch to full
+  corpus for release validation
+- Results surface as concise summary maps suitable for =tap>= / Portal inspection
+- Each schema cleanup fix maps to at least one specific assertion
+- The same test functions work at both scales by taking a sequence of events
+
+** Sample Corpus
+
+A curated set of GDM UUIDs covering the required dimensions. Load these once
+and reuse across all test runs.
+
+*** Required Coverage Dimensions
+
+| Dimension          | Values to cover                                                    |
+|--------------------+--------------------------------------------------------------------|
+| SOP version        | 5, 6, 7, 8, 9, 10, 11                                             |
+| Mode of Inheritance | AD, AR, X-Linked, Semidominant                                    |
+| Evidence types     | null variant, de novo, other variant (AD); AR; segregation;        |
+|                    | case-control; biochemical function; protein interaction;           |
+|                    | expression; functional alteration (patient/non-patient);           |
+|                    | model systems (non-human, cell culture); rescue (human,            |
+|                    | non-human, cell culture, patient)                                  |
+| Versioning         | ≥1 GDM with 3+ published versions (major and minor increments)     |
+| Publish/unpublish  | ≥1 GDM with an unpublish event in its history                      |
+
+*** Corpus Definition
+
+#+begin_src clojure
+(def sample-corpus
+  "Curated GDM UUIDs annotated by what dimension they cover.
+  Add entries as new dimensions are needed.
+  source-file is the most recent event store file containing these events."
+  [{:uuid "815e0f84-b530-4fd2-81a9-02e02bf352ee"   ; ABCD1
+    :gene "ABCD1"
+    :moi :X-Linked
+    :sop [5 6 7]                                    ; fill in after inspection
+    :versions :many                                 ; known to have 3+ versions
+    :has-unpublish true
+    :notes "Long curation history; covers unpublish; used extensively in user.clj"}
+   {:uuid "d1230a85-2a8b-4321-b36d-213daae9a28a"
+    :gene "unknown"                                 ; fill in after inspection
+    :moi :unknown
+    :sop []
+    :notes "Used in user.clj recuration analysis"}
+   ;; TODO: add entries for each SOP version (4–11) and evidence type
+   ;; To find a curation with a specific SOP, filter by :cg/specifiedBy in the model:
+   ;; (rdf/create-query "select ?s where { ?a a :cg/Statement ; :cg/specifiedBy ?s }")
+   ;; To find a curation with specific evidence, inspect the GCI JSON for the
+   ;; modelSystems / rescue / functionalAlteration / biochemicalFunction keys
+   ])
+
+(def source-file
+  "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz")
+
+(defn load-corpus
+  "Load and transform all events for UUIDs in sample-corpus.
+  Returns a map of uuid -> seq of transformed events (all versions)."
+  [source-file corpus]
+  (let [uuids (set (map :uuid corpus))
+        uuid-pattern (re-pattern (str/join "|" uuids))]
+    (event-store/with-event-reader [r source-file]
+      (->> (event-store/event-seq r)
+           (filter #(re-find uuid-pattern (::event/value %)))
+           (map transform-curation)
+           (group-by #(-> % ::event/value
+                          (as-> v (re-find uuid-pattern v))))
+           (into {})))))
+#+end_src
+
+** Test Functions
+
+*** Core Assertion Infrastructure
+
+#+begin_src clojure
+(defn check
+  "Run a single named check fn against a model.
+  check-fn takes a model and returns truthy on pass."
+  [check-fn label model]
+  {:label label
+   :result (if (check-fn model) :pass :fail)})
+
+(defn run-checks
+  "Run all checks against a single transformed event.
+  Returns a map with the event's IRI and per-check results."
+  [checks transformed-event]
+  (let [model (:gene-validity/model transformed-event)]
+    {:iri (::event/iri transformed-event)
+     :key (::event/key transformed-event)
+     :results (mapv (fn [{:keys [label check-fn]}]
+                      (check check-fn label model))
+                    checks)}))
+
+(defn summarize
+  "Given results from run-checks across many events, return a concise summary.
+  Shows pass/fail counts per check and lists failing IRIs."
+  [all-results]
+  (->> all-results
+       (mapcat :results)
+       (group-by :label)
+       (map (fn [[label results]]
+              (let [fails (->> all-results
+                               (filter (fn [r]
+                                         (some #(and (= label (:label %))
+                                                     (= :fail (:result %)))
+                                               (:results r))))
+                               (mapv :iri))]
+                {:label label
+                 :pass (count (filter #(= :pass (:result %)) results))
+                 :fail (count (filter #(= :fail (:result %)) results))
+                 :failing-iris fails})))
+       (sort-by :fail >)))
+
+(defn run-and-summarize
+  "Convenience: run all checks over a seq of transformed events and summarize."
+  [checks transformed-events]
+  (->> transformed-events
+       (map #(run-checks checks %))
+       summarize))
+#+end_src
+
+*** Checks Addressing schema-cleanup.org Items
+
+Each check corresponds to a specific bug identified in the cleanup document.
+
+#+begin_src clojure
+(def statement-query
+  (rdf/create-query "select ?x where { ?x a :cg/Statement }"))
+
+(def has-statement
+  "Every published model must contain exactly one cg:Statement."
+  {:label :has-statement
+   :check-fn #(= 1 (count (statement-query %)))})
+
+(def has-kafka-iri
+  "The Kafka key (::event/iri) must be non-empty.
+  Fixes: add-iri-fn using old EvidenceStrengthAssertion class."
+  {:label :has-kafka-iri
+   :check-fn (fn [_model] true)                    ; checked at event level, not model
+   :event-check-fn #(seq (::event/iri %))})
+
+(def has-legacy-website-id
+  "The model must contain a cg:websiteLegacyID triple.
+  Fixes: add_legacy_website_id.sparql and legacy-website-id fn using old class/property names."
+  {:label :has-legacy-website-id
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?id where { ?a :cg/websiteLegacyID ?id }") m)))})
+
+(def has-evaluated-contribution
+  "Model must have a contribution with activityType cg:Evaluated.
+  Validates: construct_statement.sparql and that approval-activity-query finds results."
+  {:label :has-evaluated-contribution
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?c where { ?c :cg/activityType :cg/Evaluated }") m)))})
+
+(def has-submitted-contribution
+  "Model must have a contribution with activityType cg:Submitted (publish action).
+  Validates: new activity type terms in statement."
+  {:label :has-submitted-contribution
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?c where { ?c :cg/activityType :cg/Submitted }") m)))})
+
+(def no-disconnected-evidence-lines
+  "Every EvidenceLine must be reachable from the Statement.
+  Fixes: validation.clj check updated to use cg:Statement."
+  {:label :no-disconnected-evidence-lines
+   :check-fn (fn [m]
+               (let [q (rdf/create-query "
+select ?el where {
+  ?el a :cg/EvidenceLine .
+  ?a a :cg/Statement .
+  filter not exists { ?a :cg/hasEvidenceItems* | :cg/evidence* ?el . }
+}")]
+                 (empty? (q m))))})
+
+(def has-evidence-lines
+  "Statement must link to at least one EvidenceLine.
+  Basic structural check for the evidence hierarchy."
+  {:label :has-evidence-lines
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?el where { ?a a :cg/Statement ; :cg/hasEvidenceLines ?el }") m)))})
+
+(def has-classification
+  "Statement must have a cg:classification."
+  {:label :has-classification
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?c where { ?a a :cg/Statement ; :cg/classification ?c }") m)))})
+
+(def has-proposition
+  "Model must contain a cg:GeneValidityProposition."
+  {:label :has-proposition
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?p where { ?p a :cg/GeneValidityProposition }") m)))})
+
+(def unpublish-has-date
+  "An unpublished model must have a contribution with activityType cg:Unpublished and a date.
+  Fixes: website_events.clj using :cg/Unpublisher instead of :cg/Unpublished."
+  {:label :unpublish-has-date
+   :check-fn (fn [m]
+               (let [unpub-q (rdf/create-query
+                               "select ?d where { ?c :cg/activityType :cg/Unpublished ; :cg/date ?d }")]
+                 ;; only applies to models that are unpublish events
+                 (or (empty? ((rdf/create-query
+                               "select ?c where { ?c :cg/activityType :cg/Unpublished }") m))
+                     (seq (unpub-q m)))))})
+
+;; Collect all publish-event checks
+(def publish-checks
+  [has-statement
+   has-legacy-website-id
+   has-evaluated-contribution
+   has-submitted-contribution
+   no-disconnected-evidence-lines
+   has-evidence-lines
+   has-classification
+   has-proposition])
+
+;; All checks including unpublish-specific
+(def all-checks
+  (conj publish-checks unpublish-has-date))
+#+end_src
+
+*** Website Event Checks
+
+#+begin_src clojure
+(defn check-website-event
+  "Validate a website event map against the clojure.spec definition.
+  Returns {:result :pass/:fail :explain ...}"
+  [website-event]
+  (if (nil? website-event)
+    {:result :skip :reason :no-website-event}
+    (if (s/valid? ::website-events/event-data website-event)
+      {:result :pass}
+      {:result :fail
+       :explain (s/explain-data ::website-events/event-data website-event)})))
+
+(defn run-website-event-checks
+  "Run spec validation over website events from a seq of transformed events."
+  [transformed-events]
+  (let [results (->> transformed-events
+                     (map (fn [e]
+                            {:iri (::event/iri e)
+                             :check (check-website-event
+                                     (:gene-validity/website-event e))})))]
+    {:pass (count (filter #(= :pass (-> % :check :result)) results))
+     :fail (count (filter #(= :fail (-> % :check :result)) results))
+     :skip (count (filter #(= :skip (-> % :check :result)) results))
+     :failures (->> results
+                    (filter #(= :fail (-> % :check :result)))
+                    (mapv #(select-keys % [:iri :check])))}))
+#+end_src
+
+** Incremental Workflow
+
+The intended workflow while applying fixes from =schema-cleanup.org=:
+
+#+begin_src clojure
+;; 1. Load the small sample corpus once
+(def corpus-events (load-corpus source-file sample-corpus))
+
+;; 2. Flatten to a seq of all transformed events across all GDMs
+(def sample-events (mapcat val corpus-events))
+
+;; 3. After each fix, re-evaluate the changed namespace and re-run:
+(tap> (run-and-summarize all-checks sample-events))
+
+;; 4. Inspect a specific failing event's model:
+(-> corpus-events
+    (get "815e0f84-b530-4fd2-81a9-02e02bf352ee")
+    first
+    :gene-validity/model
+    rdf/pp-model)
+
+;; 5. Run website event checks separately:
+(tap> (run-website-event-checks sample-events))
+
+;; 6. Drill into a specific failure:
+(let [failing-iri "..."]
+  (->> sample-events
+       (filter #(= failing-iri (::event/iri %)))
+       first
+       :gene-validity/model
+       rdf/pp-model))
+#+end_src
+
+*** Checking a Single Fix in Isolation
+
+To verify one specific fix without re-running everything:
+
+#+begin_src clojure
+;; Example: verifying the add-iri-fn fix
+(->> sample-events
+     (map #(check (constantly (seq (::event/iri %))) :has-kafka-iri %))
+     (group-by :result)
+     (map (fn [[k v]] [k (count v)]))
+     (into {}))
+#+end_src
+
+** Full Corpus Validation
+
+Run before any release candidate. This processes the complete event history.
+
+#+begin_src clojure
+(defn validate-full-corpus
+  "Run all checks over the complete event store. Expects reset test-app state
+  (version store cleared) before running to avoid version-state interference.
+  Returns summary + first N failing IRIs per check."
+  [source-file]
+  (event-store/with-event-reader [r source-file]
+    (->> (event-store/event-seq r)
+         (map transform-curation)
+         (run-and-summarize all-checks))))
+
+;; Run -- takes several minutes
+(comment
+  (time (tap> (validate-full-corpus source-file))))
+
+;; Website events over full corpus
+(comment
+  (time
+   (tap>
+    (event-store/with-event-reader [r source-file]
+      (->> (event-store/event-seq r)
+           (map transform-curation)
+           run-website-event-checks)))))
+#+end_src
+
+** Corpus Selection Guide
+
+To find events covering a specific dimension, use these patterns in the REPL
+before adding a UUID to =sample-corpus=:
+
+#+begin_src clojure
+;; Find a curation using a specific SOP version
+(def sop-query (rdf/create-query "select ?s where { ?a a :cg/Statement ; :cg/specifiedBy ?s }"))
+
+(event-store/with-event-reader [r source-file]
+  (->> (event-store/event-seq r)
+       (take 500)
+       (map transform-curation)
+       (filter #(some-> % :gene-validity/model sop-query first str
+                          (str/includes? "GeneValidityCriteria4")))
+       (map #(-> % ::event/value (re-find #"[0-9a-f-]{36}")))
+       first))
+
+;; Find a curation with functional alteration evidence
+(def fa-query
+  (rdf/create-query
+   "select ?el where { ?el a :cg/EvidenceLine ;
+                       :cg/specifiedBy :cg/GeneValidityOverallFunctionalAlterationEvidenceCriteria }"))
+
+(event-store/with-event-reader [r source-file]
+  (->> (event-store/event-seq r)
+       (take 500)
+       (map transform-curation)
+       (filter #(seq (fa-query (:gene-validity/model %))))
+       (map #(-> % ::event/value (re-find #"[0-9a-f-]{36}")))
+       first))
+
+;; Find a curation with an unpublish event
+(def unpub-query
+  (rdf/create-query "select ?c where { ?c :cg/activityType :cg/Unpublished }"))
+
+(event-store/with-event-reader [r source-file]
+  (->> (event-store/event-seq r)
+       (take 500)
+       (map transform-curation)
+       (filter #(seq (unpub-query (:gene-validity/model %))))
+       (map #(-> % ::event/value (re-find #"[0-9a-f-]{36}")))
+       first))
+#+end_src
+
+** Mapping Fixes to Checks
+
+| Fix (schema-cleanup.org)                        | Validates with check           |
+|-------------------------------------------------+--------------------------------|
+| =add-iri-fn=: EvidenceStrengthAssertion → Statement | =:has-kafka-iri=           |
+| =assertion-query= in sepio_model.clj            | =:has-legacy-website-id=       |
+| =approval-activity-query=: bfo/realizes → activityType | =:has-legacy-website-id=  |
+| =add_legacy_website_id.sparql=                  | =:has-legacy-website-id=       |
+| =validation.clj= disconnected lines check       | =:no-disconnected-evidence-lines= |
+| =website_events.clj= Unpublisher → Unpublished  | =:unpublish-has-date=, website event spec |
+| Statement contribution terms                    | =:has-evaluated-contribution=, =:has-submitted-contribution= |
+
+** Suggested Fix Order
+
+Apply fixes in this order to minimize cascading failures and make progress
+visible after each step:
+
+1. =add_legacy_website_id.sparql= — isolated SPARQL change, no Clojure
+2. =validation.clj= — fixes the test harness itself; must come early
+3. =sepio_model.clj= =assertion-query= + =approval-activity-query= — legacy ID
+4. =gene_validity.clj= =add-iri-fn= — Kafka key; fixes =:has-kafka-iri=
+5. =website_events.clj= =:cg/Unpublisher= → =:cg/Unpublished= — fixes unpublish detection
+6. =user.clj= query updates — dev experience only, no production impact

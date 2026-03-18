@@ -1,0 +1,439 @@
+(ns validate-schema-migration
+  (:require [genegraph.transform.gene-validity :as gv]
+            [genegraph.transform.gene-validity.sepio-model :as sepio-model]
+            [genegraph.transform.gene-validity.gci-model :as gci-model]
+            [genegraph.transform.gene-validity.versioning :as versioning]
+            [genegraph.transform.gene-validity.website-events :as website-events]
+            [genegraph.transform.gene-validity.event-recorder :as recorder]
+            [genegraph.transform.gene-validity.abbreviate :as abbrev]
+            [genegraph.framework.app :as app]
+            [genegraph.framework.event :as event]
+            [genegraph.framework.event.store :as event-store]
+            [genegraph.framework.protocol :as p]
+            [genegraph.framework.kafka :as kafka]
+            [genegraph.framework.storage.rdf :as rdf]
+            [genegraph.framework.storage.rocksdb :as rocksdb]
+            [genegraph.framework.storage :as storage]
+            [genegraph.framework.processor :as processor]
+            [io.pedestal.interceptor :as interceptor]
+            [io.pedestal.log :as log]
+            [portal.api :as portal]
+            [clojure.data.json :as json]
+            [hato.client :as hc]
+            [clojure.data.csv :as csv]
+            [clojure.java.io :as io]
+            [clojure.string :as str]
+            [clojure.math :as math]
+            [clojure.set :as set]
+            [charred.api :as charred]
+            [clojure.walk :as walk]
+            [clojure.spec.alpha :as spec]))
+
+
+(comment
+  (do
+    (def portal (portal/open))
+    (add-tap #'portal/submit))
+  (portal/close)
+  (portal/clear)
+  )
+
+
+(def prop-query
+  (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }" ))
+
+(def assertion-query
+  (rdf/create-query "select ?x where { ?x a :cg/EvidenceStrengthAssertion }" ))
+
+(defn record-gv-curation-fn [e]
+  (if-let [assertion (-> e ::event/data assertion-query first)]
+    (if-let [original-version (rdf/ld1-> assertion [:dc/isVersionOf])]
+      (event/store e
+                   :curation-output
+                   [(str original-version)
+                    (str assertion)]
+                   (::event/data e))
+      e)
+    e))
+
+(def record-gv-curation
+  {:name :record-gv-curation
+   :enter (fn [e] (record-gv-curation-fn e))})
+
+(def record-output-processor
+  {:type :processor
+   :name :record-output-processor
+   :subscribe :gene-validity-sepio
+   :interceptors [record-gv-curation]})
+
+(def curation-output
+  {:type :rocksdb
+   :name :curation-output
+   :path (str (:local-data-path gv/env) "gv-curation-output")
+   :reset-opts {}})
+
+(def test-app-def
+  {:type :genegraph-app
+   :topics {:gene-validity-complete
+            {:type :simple-queue-topic
+             :name :gene-validity-complete}
+            :gene-validity-sepio
+            {:type :simple-queue-topic
+             :name :gene-validity-sepio}
+            :gene-validity-sepio-jsonld
+            {:type :simple-queue-topic
+             :name :gene-validity-sepio-jsonld}}
+   :storage {:gene-validity-version-store
+             (assoc gv/gene-validity-version-store :reset-opts {})
+             :curation-output curation-output}
+   :processors {:gene-validity-transform (assoc gv/transform-processor
+                                                :type :parallel-processor)
+                :record-output-processor record-output-processor}})
+
+
+(comment
+  (def test-app (p/init test-app-def))
+  (p/start test-app)
+  (p/stop test-app)
+  )
+;; ---------------------------------------------------------------------------
+;; GDM UUIDs used as test cases in genegraph.user
+;; ---------------------------------------------------------------------------
+
+(def test-uuids
+  "All GDM UUIDs referenced as filter patterns or explicit test cases in user.clj.
+  Used to build the curated sample corpus for migration validation."
+  ["93ab3f0b-c5e1-43be-b9ce-9236198e91c2" ; rocksdb range-get target
+   "cb06ff0d-1cc6-494c-9ce5-f7cb26f34620" ; re-find filter (x2)
+   "01f588c4-4fef-493d-b5e0-a76fb9492244" ; storage/read target
+   "3e96651d-5979-416b-abc5-2e6702c35871" ; gci-link example
+   "d1230a85-2a8b-4321-b36d-213daae9a28a" ; filterv (recuration analysis)
+   "0204e276-fa45-4756-a380-eb494f5237f8" ; STAT3 filter-str
+   "4f30eccd-ee01-4dc2-b656-c40caffd7c06" ; STAG1 filter-str
+   "75516cff-17fd-47bd-8873-862b66741de2" ; MGME1 filter-str
+   "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e" ; ABCD1 (write-transformed-events, filter)
+   "815e0f84-b530-4fd2-81a9-02e02bf352ee" ; ABCD1 (write-transformed-events, filter)
+   "981c47f7-74ed-4cea-8df4-6d8df4bd0383" ; re-find filter; also seen as v2.0
+   "f1705bb1-c435-4106-ab9b-422ff2dfe4bf" ; filter-str
+   "ffe06cdd-813b-423e-8693-bd5fcac657c2" ; get-case c1
+   "00140591-caa8-4d47-b4ca-3f0577b16d73" ; get-case p1
+   "8afc42b0-6c5e-460b-87d1-035c051fe7ca" ; gdi1 (AD curation)
+   "6037e055-90a1-4727-be41-fa3295982b12" ; csf2ra
+   "ba6f8aa3-9aa9-4755-8dec-bb5c69005bbe" ; aimp2
+   "9b0a844b-f968-48e0-8940-35584eb3454b" ; DFNA5
+   "f27e3d88-0a3d-44f8-bbbc-1f668e596541" ; myo1c
+   "f30149c6-d644-430b-8e4b-3c825cfdf333" ; re-find filter
+   "0ed13f17-9636-4e84-b6cd-1ac51fdc5a8c" ; proposition IRI set
+   "621b0c10-bab1-4848-a89e-b824479a941b" ; proposition IRI set
+   "54748aa6-6bee-4fec-94e8-19b521447489" ; proposition IRI set
+   "573a2983-4b49-4d67-b164-a572e0711c3d" ; proposition IRI set
+   "f31be353-ae5f-4062-85f0-607c45cc38ea" ; re-find filter + proposition IRI
+   "f1a44725-cee2-4377-9ef0-d13cc6b0af63" ; re-find filter + proposition IRI
+   "ef2d0d7a-4e5a-47ef-ab33-20dcce11e922" ; re-find filter + proposition IRI
+   "ec13ca39-cecd-4659-8959-fcd8278e480b" ; re-find filter + proposition IRI
+   "2e57707b-458d-4e8a-ac4a-d6d17b98b9e0" ; proposition IRI set
+   "d0c3cebf-14f1-486a-b984-3a79da6ea83d" ; proposition IRI set
+   "a0a9ec11-ef90-4095-9c9e-696eabd0395b" ; GDI1 get-curations
+   "c16423b1-2353-475c-a43e-987a46fa1f00" ; ZEB2 tap-history
+   "b372c7f6-bbac-488a-812a-0d27002e88a2" ; tap-history
+   "b1958371-3f4a-43a3-b110-8451cab9de91" ; tap-history
+   ])
+
+(def test-uuid-pattern
+  (re-pattern (str/join "|" test-uuids)))
+
+(defn test-uuid-event? [event]
+  (re-find test-uuid-pattern (::event/value event)))
+
+(defn load-test-events
+  "Return all events from source-file whose value contains a test UUID,
+  as a map of uuid -> vec of raw (untransformed) events in sequence order."
+  [source-file]
+  (event-store/with-event-reader [r source-file]
+    (->> (event-store/event-seq r)
+         (filter test-uuid-event?)
+         (group-by #(re-find test-uuid-pattern (::event/value %)))
+         (into {}))))
+
+;; ---------------------------------------------------------------------------
+;; Transform
+;; ---------------------------------------------------------------------------
+(comment
+  (defn transform-curation [e]
+    (p/process (get-in test-app [:processors :gene-validity-transform])
+               (assoc e
+                      ::event/completion-promise (promise)
+                      ::event/skip-local-effects true
+                      ::event/skip-publish-effects true))))
+
+;; ---------------------------------------------------------------------------
+;; Checks
+;; ---------------------------------------------------------------------------
+
+(def statement-query
+  (rdf/create-query "select ?x where { ?x a :cg/Statement }"))
+
+(def has-statement
+  {:label :has-statement
+   :check-fn #(= 1 (count (statement-query %)))})
+
+(def has-kafka-iri
+  {:label :has-kafka-iri
+   :check-fn (constantly true)   ; checked at event level via run-checks
+   :event-check-fn #(seq (::event/iri %))})
+
+(def has-legacy-website-id
+  {:label :has-legacy-website-id
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?id where { ?a :cg/websiteLegacyID ?id }") m)))})
+
+(def has-evaluated-contribution
+  {:label :has-evaluated-contribution
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?c where { ?c :cg/activityType :cg/Evaluated }") m)))})
+
+(def has-submitted-contribution
+  {:label :has-submitted-contribution
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?c where { ?c :cg/activityType :cg/Submitted }") m)))})
+
+(def no-disconnected-evidence-lines
+  {:label :no-disconnected-evidence-lines
+   :check-fn (fn [m]
+               (let [q (rdf/create-query "
+select ?el where {
+  ?el a :cg/EvidenceLine .
+  ?a a :cg/Statement .
+  filter not exists { ?a (:cg/hasEvidenceLines|:cg/hasEvidenceItems|:cg/evidence)* ?el . }
+}")]
+                 (empty? (q m))))})
+
+(def has-evidence-lines
+  {:label :has-evidence-lines
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?el where { ?a a :cg/Statement ; :cg/hasEvidenceLines ?el }") m)))})
+
+(def has-classification
+  {:label :has-classification
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?c where { ?a a :cg/Statement ; :cg/classification ?c }") m)))})
+
+(def has-proposition
+  {:label :has-proposition
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?p where { ?p a :cg/GeneValidityProposition }") m)))})
+
+(def unpublish-has-date
+  {:label :unpublish-has-date
+   :check-fn (fn [m]
+               (let [unpub-contributions
+                     ((rdf/create-query
+                       "select ?c where { ?c :cg/activityType :cg/Unpublished }") m)]
+                 (or (empty? unpub-contributions)
+                     (seq ((rdf/create-query
+                            "select ?c where { ?c :cg/activityType :cg/Unpublished ; :cg/date ?d }") m)))))})
+
+(def publish-checks
+  [has-statement
+   has-kafka-iri
+   has-legacy-website-id
+   has-evaluated-contribution
+   has-submitted-contribution
+   no-disconnected-evidence-lines
+   has-evidence-lines
+   has-classification
+   has-proposition])
+
+(def unpublish-checks
+  [unpublish-has-date
+   has-statement
+   has-kafka-iri])
+
+;; ---------------------------------------------------------------------------
+;; Run checks
+;; ---------------------------------------------------------------------------
+
+(defn unpublished? [event]
+  (let [q (rdf/create-query "select ?c where { ?c :cg/activityType :cg/Unpublished }")]
+    (some-> event :gene-validity/model q seq)))
+
+(defn checks-for [event]
+  (if (unpublished? event) unpublish-checks publish-checks))
+
+(defn run-checks
+  "Run all checks against a single transformed event.
+  Checks with :event-check-fn are evaluated against the event map;
+  checks with :check-fn are evaluated against the RDF model."
+  [checks transformed-event]
+  (let [model (:gene-validity/model transformed-event)]
+    {:iri   (::event/iri transformed-event)
+     :key   (::event/key transformed-event)
+     :results
+     (mapv (fn [{:keys [label check-fn event-check-fn]}]
+             {:label  label
+              :result (if (if event-check-fn
+                            (event-check-fn transformed-event)
+                            (check-fn model))
+                        :pass
+                        :fail)})
+           checks)}))
+
+(defn summarize
+  "Given a seq of run-checks results, return pass/fail counts per check
+  sorted by number of failures descending, with failing IRIs listed."
+  [all-results]
+  (->> all-results
+       (mapcat :results)
+       (group-by :label)
+       (map (fn [[label results]]
+              {:label label
+               :pass  (count (filter #(= :pass (:result %)) results))
+               :fail  (count (filter #(= :fail (:result %)) results))
+               :failing-iris
+               (->> all-results
+                    (filter (fn [r]
+                              (some #(and (= label (:label %))
+                                          (= :fail (:result %)))
+                                    (:results r))))
+                    (mapv :iri))}))
+       (sort-by :fail >)))
+
+(defn run-and-summarize [transformed-events]
+  (->> transformed-events
+       (map #(run-checks (checks-for %) %))
+       summarize))
+
+;; ---------------------------------------------------------------------------
+;; Website event checks
+;; ---------------------------------------------------------------------------
+
+(defn check-website-event [website-event]
+  (if (nil? website-event)
+    {:result :skip}
+    (if (spec/valid? ::website-events/event-data website-event)
+      {:result :pass}
+      {:result :fail
+       :explain (spec/explain-data ::website-events/event-data website-event)})))
+
+(defn run-website-event-checks [transformed-events]
+  (let [results (mapv (fn [e]
+                        {:iri   (::event/iri e)
+                         :check (check-website-event (:gene-validity/website-event e))})
+                      transformed-events)]
+    {:pass     (count (filter #(= :pass (-> % :check :result)) results))
+     :fail     (count (filter #(= :fail (-> % :check :result)) results))
+     :skip     (count (filter #(= :skip (-> % :check :result)) results))
+     :failures (->> results
+                    (filter #(= :fail (-> % :check :result)))
+                    (mapv #(select-keys % [:iri :check])))}))
+
+;; ---------------------------------------------------------------------------
+;; Usage
+;; ---------------------------------------------------------------------------
+
+(comment
+  (do
+    (def test-app (p/init test-app-def))
+    (p/start test-app)
+    (defn transform-curation [e]
+      (p/process (get-in test-app [:processors :gene-validity-transform])
+                 (assoc e
+                        ::event/completion-promise (promise)
+                        ::event/skip-local-effects true
+                        ::event/skip-publish-effects true))))
+
+  
+
+  (def source-file
+    "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-03-18.edn.gz")
+
+  ;; Testing predicates
+  (event-store/with-event-reader [r source-file]
+    (tap>
+     (into []
+           (comp (take 10)
+                 (map transform-curation)
+                 (map abbrev/abbreviate)
+                 (remove :gene-validity/valid))
+           (event-store/event-seq r))))
+
+  ;; Load all test UUID events, grouped by UUID, in sequence order
+  (def test-event-map (load-test-events source-file))
+  (keys test-event-map)
+  (count test-event-map)
+  (count (mapcat val test-event-map))
+
+  ;; Transform all events in the test set
+  (time
+   (def sample-events
+     (->> (mapcat val test-event-map)
+          (mapv transform-curation))))
+  (+ 1 1)
+
+  (tap> (first sample-events))
+
+  ;; Run all checks and summarize
+  (tap> (run-and-summarize sample-events))
+
+  ;; Run over all events
+  (->> (load-test-events))
+  
+  (+ 1 1)
+  ;; Website event validation
+  (tap> (run-website-event-checks sample-events))
+
+  ;; Inspect one UUID's full version history
+  (run! #(-> % :gene-validity/model rdf/pp-model)
+        (->> (get test-event-map "815e0f84-b530-4fd2-81a9-02e02bf352ee")
+             (mapv transform-curation)))
+
+(fn [m]
+               (let [q (rdf/create-query "
+select ?el where {
+  ?el a :cg/EvidenceLine .
+  ?a a :cg/Statement .
+  filter not exists { ?a (:cg/hasEvidenceLines|:cg/hasEvidenceItems|:cg/evidence)* ?el . }
+}")]
+                 (empty? (q m))))
+  
+  ;; Drill into a failing event
+  (let [failing-iri
+        "https://genegraph.clinicalgenome.org/r/d1230a85-2a8b-4321-b36d-213daae9a28av1.0"
+        q (rdf/create-query "
+select ?el where {
+  ?el a :cg/EvidenceLine .
+  ?a a :cg/Statement .
+  filter not exists { ?a (:cg/hasEvidenceLines|:cg/hasEvidenceItems|:cg/evidence)* ?el . }
+}")]
+    (->> sample-events
+         (filter #(= failing-iri (::event/iri %)))
+         (mapv #(-> % :gene-validity/model q))
+         tap>))
+
+  (let [failing-iri
+        "https://genegraph.clinicalgenome.org/r/d1230a85-2a8b-4321-b36d-213daae9a28av1.0"
+        q (rdf/create-query "
+select ?el where {
+  ?el a :cg/EvidenceLine .
+  ?a a :cg/Statement .
+  filter not exists { ?a (:cg/hasEvidenceLines|:cg/hasEvidenceItems|:cg/evidence)* ?el . }
+}")]
+    (->> sample-events
+         (filter #(= failing-iri (::event/iri %)))
+         #_(mapv #(-> % :gene-validity/model q))
+         #_(mapv #(-> % (dissoc :gene-validity/model :gene-validity/gci-model)))
+         (mapv #(select-keys % [::event/key ::event/offset ::event/topic]))
+         clojure.pprint/pprint
+         #_:gene-validity/model
+         #_rdf/pp-model))
+  
+  
+  ;; website legacy id appears broken, maybe OK to get rid of it
+
+  (p/stop test-app))

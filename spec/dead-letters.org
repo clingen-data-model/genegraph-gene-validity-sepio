@@ -1,0 +1,120 @@
+* Overview
+
+One would like to test records for validity. The existing, known bad records should be annotated.
+
+* Current status
+
+The current transformer reads in the input stream of GCI records and ouputs a SEPIO formatted version of 
+
+* Workflows
+
+** Development
+
+I need to be able to make a change to the schema and validate that things have not changed unexpectedly.
+
+This will probably look a lot like the schema update workflow, but with changes being temporary (unless flagged otherwise). I want to make a change to the code and see what effect it is going to have.
+
+** Initial deployment
+
+We populate and version records from the beginning. At this point I will have done development and testing. Records that fail and are dead-lettered are pre-annotated; no further followup required.
+
+How do we document outcomes for DLQ records?
+
+** Passive operation
+
+New records come in. Some of them may be destined for the dead letter queue (if they fail critical checks). Others might be accepted for publication, but flagged for review if they fail warning-level checks.
+
+What will the notification mechanism look like?
+
+Will documentation for these issues follow the same process as the initial deployment, or will there be a different mechanism?
+
+** Schema updates
+
+A change has been made that has impacts on already published records. The entire history needs to be reviewed for changes. Records with updated information will need to be republished with a patch revision. Similar to initial deployment in some respects.
+
+Will we publish patch revisions for historic records? Or just the most current?
+
+Will I touch dead letter queue records?
+
+* Support infrastructure
+
+This calls for a process oriented database--RocksDB is quite sufficient for this.
+
+Need to record incoming data and outgoing data.
+
+Need to be able to rebuild from existing streams.
+
+Need to be able to fiddle in dev and reset state easily
+
+* Operations
+
+** Store input event
+
+Store input event with key as offset, 
+
+** Store output event
+
+Don't necessarily know offset; certainly not when working with Kafka events
+
+May not care as long as events are sequential
+
+Each output event needs a unique key that gets written to the stream as well as the database. When events are reread, avoid inputing events that have the same key.
+
+** Delete output events in offset range
+
+Start from 0 to have a clean slate
+
+Start from a specific offset to clear events in development
+
+** Summarize output events in offset range
+
+Test effect of changes; identify potential issues
+
+Event Key
+Event 'versionOf' (GDM ID)
+Tests passed/failed
+Version
+Value digest (which one? xxhash used elsewhere)
+
+** Index facts about input and output events
+
+Scanning and deserializing entire models is going to be a bit slow for most operations
+
+There will be a need for parallel output keys with a basic map of facts about a given curation, without the model.
+
+There may also be a need for options to index by various attributes; keys, publish vs unpublish.
+
+Seems like these indexes might be transient. May just want to have functions scanning the summary data.
+
+** Identify last published version of a curation
+
+When a curation is published, write the summary information to a key for the version master record.
+
+
+
+* Snapshot generation
+
+Currently snapshot generation is dealt with by another process due to the transformer not consuming the output queue.
+
+After the necessary changes are made, the transformer will have all the information needed to generate snapshots. Maybe move this back in-process?
+
+* Suggested solution
+
+Production scale event recorder. This should also help address the versioning persistence problem.
+
+Should also address the question about what to do when reprocessing the stream after a new version release.
+
+* Implementation
+
+Transformer reads in entire history topic. Cannot proceed until history topic is up to date.
+
+Records are stored in RocksDB. 
+
+Do I want to continue using this as a consumer group consumer? Seems like synchronizing local stores with external products is an issue. If we're relying on local state (we are) I don't see a good reason to continue storing an offset elsewhere.
+
+Would potentially save us the bother of using transactional producers?
+
+The main virtue of consumer groups is that they can gate consumers. When restarting I don't really have this mechanism; feels like an important thing to have. Also feels useful for publishing multiple messages.
+
+
+

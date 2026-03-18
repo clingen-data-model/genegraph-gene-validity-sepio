@@ -502,13 +502,11 @@ construct {
   (let [event-with-approval-date (add-approval-date event)]
     (if (and (has-publish-action (:gene-validity/model event))
              (:gene-validity/approval-date event-with-approval-date))
-      (do
-        (tap> (::event/key event))
-        (-> event-with-approval-date
-            add-prop-iri
-            add-version-map
-            store-this-version
-            add-versioned-model))
+      (-> event-with-approval-date
+          add-prop-iri
+          add-version-map
+          store-this-version
+          add-versioned-model)
       event-with-approval-date)))
 
 #_(defn update-unpublish-event [event]

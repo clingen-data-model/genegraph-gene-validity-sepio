@@ -1,59 +1,39 @@
 (ns genegraph.transform.gene-validity.validation
   (:require [genegraph.framework.storage.rdf :as rdf]
-            [genegraph.framework.event :as event]))
+            [genegraph.framework.event :as event]
+            [io.pedestal.interceptor :as interceptor]))
 
-(def disconnected-evidence-lines-query
-  (rdf/create-query "
-select ?el where {
-?el a :cg/EvidenceLine .
-?a a :cg/EvidenceStrengthAssertion .
-filter not exists {
-?a :cg/evidence * ?el .
-}
-}"))
-
-(defn has-disconnected-evidence-lines [m]
-  (let [disconnected-evidence-lines (disconnected-evidence-lines-query m)]
-    (if (seq disconnected-evidence-lines)
-      {:result :fail
-       :test ::has-disconnected-evidence-lines
-       :items (mapv str disconnected-evidence-lines)}
-      {:result :pass
-       :test ::has-disconnected-evidence-lines})))
+(defn publish? [event]
+  (= :cg/Submitted (:cg/activityType event)))
 
 (def tests
-  [has-disconnected-evidence-lines])
+  [{:name :no-disconnected-evidence-lines
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (let [q (rdf/create-query "
+select ?el where {
+  ?el a :cg/EvidenceLine .
+  ?a a :cg/Statement .
+  filter not exists { ?a (:cg/hasEvidenceLines|:cg/hasEvidenceItems|:cg/evidence)* ?el . }
+}")]
+                  (empty? (q model))))}])
 
-(defn validate [data]
-  (let [test-results (mapv #(% data) tests)]
-    (if (some #(= :fail (:result %)) test-results)
-      {:result :fail
-       :tests test-results}
-      {:result :pass
-       :tests test-results})))
+(defn validate-fn [event]
+  (let [results (reduce
+                 (fn [res t]
+                   (let [tr (if ((:check-fn t) event) :pass :fail)]
+                     (update res :pass conj (:name t))))
+                 {:pass []
+                  :fail []}
+                 tests)]
+    (assoc event
+           :gene-validity/passed-tests (:pass results)
+           :gene-validity/failed-tests (:fail results)
+           :gene-validity/valid (empty? (:fail results)))))
 
-(defn add-validation [event]
-  (assoc event
-         :gene-validity/validation
-         (validate (:gene-validity/model event))))
-
-
-(comment
-  ;; Exploring SHACL testing for data integrity
-
-  (genegraph.framework.event.store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-04-01.edn.gz"]
-    (->> (genegraph.framework.event.store/event-seq r)
-         (take 10)
-         (map #(genegraph.user/transform-curation %))
-         (map add-validation)
-         (filterv #(= :fail (get-in % [:gene-validity/validation :result])))
-         #_(take 1)
-         #_(mapv #(dissoc % :gene-validity/model :gene-validity/gci-model))
-         #_(mapv #(get-in % [::event/data :properties :resourceParent]))
-         #_tap>
-         #_(run! #(-> % :gene-validity/model rdf/pp-model))
-         count))
-  )
+(def validate
+  (interceptor/interceptor
+   {:name ::validation
+    :enter (fn [e] (validate-fn e))}))
 
 
 ;; Detected errors

@@ -8,6 +8,8 @@
             [genegraph.transform.gene-validity.sepio-model :as sepio-model]
             [genegraph.transform.gene-validity.versioning :as versioning]
             [genegraph.transform.gene-validity.website-events :as website-event]
+            [genegraph.transform.gene-validity.validation :as validation]
+            [genegraph.transform.gene-validity.abbreviate :as abbrev]
             [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.storage.rdf.jsonld :as jsonld]
             [genegraph.framework.storage :as storage]
@@ -96,7 +98,7 @@
          ::event/iri
          (-> (prop-query
               (:gene-validity/model event)
-              {:type :cg/EvidenceStrengthAssertion})
+              {:type :cg/Statement})
              first
              str)))
 
@@ -210,12 +212,16 @@
    :backing-store :gene-validity-version-store
    :interceptors [recorder/record-event
                   report-transform-errors
+                  abbrev/add-initial-attributes
                   gci-model/add-gci-model
+                  abbrev/add-gci-model-attributes
                   sepio-model/add-model
                   versioning/add-version
                   add-jsonld
                   add-iri
+                  abbrev/add-model-attributes
                   website-event/website-version-interceptor
+                  validation/validate
                   add-publish-actions]})
 
 (def gene-validity-complete-topic
