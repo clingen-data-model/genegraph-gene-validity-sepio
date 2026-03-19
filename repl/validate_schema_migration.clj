@@ -360,7 +360,7 @@ select ?el where {
            (comp (take 10)
                  (map transform-curation)
                  (map abbrev/abbreviate)
-                 (remove :gene-validity/valid))
+                 #_(remove :gene-validity/valid))
            (event-store/event-seq r))))
 
   ;; Load all test UUID events, grouped by UUID, in sequence order

@@ -6,8 +6,32 @@
 (defn publish? [event]
   (= :cg/Submitted (:cg/activityType event)))
 
+(defn unpublish? [event]
+  (= :cg/Unpublished (:cg/activityType event)))
+
 (def tests
-  [{:name :no-disconnected-evidence-lines
+  [{:name :has-statement
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (= 1 (count ((rdf/create-query "select ?x where { ?x a :cg/Statement }") model))))}
+   {:name :has-kafka-iri
+    :check-fn (fn [event] (seq (::event/iri event)))}
+   #_{:name :has-legacy-website-id
+    :when publish?
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (seq ((rdf/create-query
+                       "select ?id where { ?a :cg/websiteLegacyID ?id }") model)))}
+   {:name :has-evaluated-contribution
+    :when publish?
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (seq ((rdf/create-query
+                       "select ?c where { ?c :cg/activityType :cg/Evaluated }") model)))}
+   {:name :has-submitted-contribution
+    :when publish?
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (seq ((rdf/create-query
+                       "select ?c where { ?c :cg/activityType :cg/Submitted }") model)))}
+   {:name :no-disconnected-evidence-lines
+    :when publish?
     :check-fn (fn [{:gene-validity/keys [model]}]
                 (let [q (rdf/create-query "
 select ?el where {
@@ -15,13 +39,39 @@ select ?el where {
   ?a a :cg/Statement .
   filter not exists { ?a (:cg/hasEvidenceLines|:cg/hasEvidenceItems|:cg/evidence)* ?el . }
 }")]
-                  (empty? (q model))))}])
+                  (empty? (q model))))}
+   {:name :has-evidence-lines
+    :when publish?
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (seq ((rdf/create-query
+                       "select ?el where { ?a a :cg/Statement ; :cg/hasEvidenceLines ?el }") model)))}
+   {:name :has-classification
+    :when publish?
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (seq ((rdf/create-query
+                       "select ?c where { ?a a :cg/Statement ; :cg/classification ?c }") model)))}
+   {:name :has-proposition
+    :when publish?
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (seq ((rdf/create-query
+                       "select ?p where { ?p a :cg/GeneValidityProposition }") model)))}
+   {:name :unpublish-has-date
+    :when unpublish?
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (let [unpub-contributions
+                      ((rdf/create-query
+                        "select ?c where { ?c :cg/activityType :cg/Unpublished }") model)]
+                  (or (empty? unpub-contributions)
+                      (seq ((rdf/create-query
+                             "select ?c where { ?c :cg/activityType :cg/Unpublished ; :cg/date ?d }") model)))))}])
 
 (defn validate-fn [event]
   (let [results (reduce
-                 (fn [res t]
-                   (let [tr (if ((:check-fn t) event) :pass :fail)]
-                     (update res :pass conj (:name t))))
+                 (fn [res {:keys [name when check-fn]}]
+                   (if (and when (not (when event)))
+                     res
+                     (let [tr (if (check-fn event) :pass :fail)]
+                       (update res tr conj name))))
                  {:pass []
                   :fail []}
                  tests)]
@@ -46,7 +96,7 @@ select ?el where {
 ;; These scores may not have a gciCaseInfoType associated with them, and therefore
 ;; did not have a criteria associated with them either.
 ;; Modified proband score for < SOP 8 to include an option for
-;; cg:GeneValidityUncategorizedProbandCriteria , 
+;; cg:GeneValidityUncategorizedProbandCriteria ,
 
 ;; also noticing unscorable hasn't been updated to new types yet
 

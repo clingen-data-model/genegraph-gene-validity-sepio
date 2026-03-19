@@ -90,7 +90,9 @@ Seems like these indexes might be transient. May just want to have functions sca
 
 When a curation is published, write the summary information to a key for the version master record.
 
+* Reprocessing
 
+The trigger to reprocess old messages for updates should probably when code is refreshed.
 
 * Snapshot generation
 
@@ -108,13 +110,18 @@ Should also address the question about what to do when reprocessing the stream a
 
 Transformer reads in entire history topic. Cannot proceed until history topic is up to date.
 
-Records are stored in RocksDB. 
+Side effects necessary for further processing need to occur in the same processor; can't rely on output from a downstream topic except for catching up.
 
-Do I want to continue using this as a consumer group consumer? Seems like synchronizing local stores with external products is an issue. If we're relying on local state (we are) I don't see a good reason to continue storing an offset elsewhere.
+What we need is a slightly different database structure:
 
-Would potentially save us the bother of using transactional producers?
+** gene_validity_all
 
-The main virtue of consumer groups is that they can gate consumers. When restarting I don't really have this mechanism; feels like an important thing to have. Also feels useful for publishing multiple messages.
+Original messages, indexed by offset. Will reprocess this when a new code push requires it.
 
+(What does the reprocess look like? Do I 
 
+** gene_validity_all_summaries
 
+Summary of original messages. Easy to traverse without causing problems. Mostly good for looking up stuff by relevant features. Probably not part of production workflow, but very likely useful for dev and for dredging up issues after the fact.
+
+** 

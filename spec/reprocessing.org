@@ -1,0 +1,45 @@
+* Requirements
+
+We will occasionally need to reprocess events in the case of schema changes, bug fixes, etc. A clear and consistent method for doing this is necessary.
+
+It would be convenient if this workflow were incorporated into testing as well, this way the effect of code changes would be tested using the same mechanism used to bring them into effect in production.
+
+* Alternatives for republishing events
+
+** Reset consumer group, reprocess topic
+
+Stick with consumer group architecture, keep existing architecture mostly the same. Whenever we want to reprocess messages, stop the transformer, reset the consumer group, then restart the transformer.
+
+Maybe requires changing the least in terms of ingest and reprocessing, no extra coordination needed in the code, but a bit more fiddly on the ops side.
+
+** Recycle data from local storage
+
+Have a simple topic for reading gene validity all. This topic writes to local storage and passes on the event to the transformer topic, which is just a simple queue topic.
+
+On reprocess, the app first pushes all events from local storage to the transformer. Only after this is done does it continue to process new events.
+
+No unnecessary mucking with offsets or re-reading data from Kafka. Might make it easier to wire in other event sources in the future. Possibly offers an easier handle for testing in development. Production requires a bit more coordination; need to gate processing of new GV messages until older messages have been republished.
+
+** Reset local offset, reprocess topic
+
+Since we're tracking the GV offset locally anyway it may be unecessary to use the consumer group for this, except for coordinating producers. If consumers are prepared to handle duplicate messages, this might not be a big deal. Reverting the consumer group requires some manual consumer handling anyway. In case of an automated restart (kubernettes pods recycling), there is a chance (guarantee?) of two transformers operating at the same time, potentially producing duplicate messages if messages arrive during this time. They should be the ssame code and the same message, at least.
+
+* Architecture
+
+Working up the local storage solution
+
+** Topics
+
+We are discontinuing using consumer groups. This will significantly reduce the complexity of Kafka integration at the cost of possibly duplicating messages on topic. I think the simplicity is worthwhile.
+
+I think I want to continue using the transactional processor. This processor handles a fair bit of the retry logic; using it ensures that messages are delivered in-order or not at all, and will make sure that existing messages are held until retries are successful. The transactional.id also provides another (more useful) gate for dual messages. It should be less possible for duplicate messages.
+
+gene-validity-all
+transform-gv
+
+** Storage
+
+rocks: everything persisitent
+atom: Might try using this for coordination between producers, though maybe not needed with the appropriate init-fn? Will hold off, but this could be handy
+
+** 

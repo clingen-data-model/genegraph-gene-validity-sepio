@@ -28,7 +28,7 @@ This application is built on [genegraph-framework](https://github.com/clingen-da
 
 ### Startup / shutdown
 
-Order: system-processor → storage → topics → processors → http-servers (shutdown is reverse). Every app has an internal `:system` `SimpleQueueTopic`; components publish lifecycle events (`:starting`, `:started`, `:up-to-date`, `:exception`) to it.
+Order: system-processor → storage → topics → processors → http-servers (shutdown is reverse). Every app has an internal `:system` `SimpleQueueTopic`; components publish lifecycle events (`:starting`, `:started`, `:up-to-date`, `:exception`) to it. When a consumer group topic is started, it first checks to see if the relevant local state stores are up to date (and updates them if not) before processing records with publish side effects.
 
 ### RDF API idioms
 

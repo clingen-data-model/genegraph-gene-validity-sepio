@@ -1485,6 +1485,23 @@ select ?x where {
     (-> (LocalDateTime/of 2025 12 24 0 0)
         (.toInstant ZoneOffset/UTC)
         (.toEpochMilli)))
+
+  (def july-1
+    (-> (LocalDateTime/of 2025 7 1 0 0)
+        (.toInstant ZoneOffset/UTC)
+        (.toEpochMilli)))
+
+  (def mar-19
+    (-> (LocalDateTime/of 2026 3 19 0 0)
+        (.toInstant ZoneOffset/UTC)
+        (.toEpochMilli)))
+
+  (def curations-since-july-1
+    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-03-18.edn.gz"]
+      (->> (event-store/event-seq r)
+           (filterv (fn [e]
+                      (< july-1 (::event/timestamp e)))))))
+
   
   "529f9cae-ac00-47d1-94d5-52c98bf6e2a2"
   (def scn1a
@@ -1591,7 +1608,7 @@ select ?x where {
               :gene (gene e)}
              (approval e)))
     
-    (def q4-curation-records
+    #_(def q4-curation-records
       (->> q4-curations
            #_(take 1)
            (mapv transform-curation)
@@ -1602,7 +1619,24 @@ select ?x where {
                             :gene-validity/gci-model))
            
 
+           #_(run! #(rdf/pp-model (:gene-validity/model %)))))
+    (def current-curation-records
+      (->> curations-since-july-1
+           #_(take 1)
+           (mapv transform-curation)
+           (mapv ->progress-record)
+           #_tap>
+           #_(mapv #(dissoc %
+                            :gene-validity/model
+                            :gene-validity/gci-model))
+           
+
            #_(run! #(rdf/pp-model (:gene-validity/model %))))))
+
+  (-> current-curation-records
+      first
+      tap>)
+  
   (def gcep-labels
     (with-open [r (io/reader "/Users/tristan/Downloads/affils.json.txt")]
       (->> (charred/read-json r :key-fn keyword)
@@ -1677,6 +1711,7 @@ select ?x where {
      q4-curation-records)
     gcep-labels))
 
+  ;; asdf 
   (with-open [w (io/writer "/Users/tristan/Desktop/gcep-report.csv")]
     (->>
      (set/rename-keys
@@ -1691,7 +1726,7 @@ select ?x where {
              (update m1 (:secondary-contributor r) inc-secondary)
              m1)))
        {}
-       q4-curation-records)
+       current-curation-records)
       gcep-labels)
      (mapv (fn [[k {:keys [new recuration secondary]}]]
              [k new recuration secondary]))
