@@ -1,7 +1,9 @@
 (ns genegraph.transform.gene-validity.event-recorder
   (:require [genegraph.framework.storage :as storage]
             [genegraph.framework.event :as event]
-            [io.pedestal.interceptor :as interceptor]))
+            [io.pedestal.interceptor :as interceptor]
+            [io.pedestal.log :as log]
+            [clojure.set :as set]))
 
 (defn enter-record-event-fn [event]
   event)
@@ -37,4 +39,65 @@
     :leave (fn [e] (leave-record-event-fn e))
     :error (fn [e] (error-record-event-fn e))}))
 
+(defn saved-data [{::event/keys [offset]
+                   :keys [versions]
+                   :as event}
+                  data-key]
+  (let [result (storage/read
+                (get-in event [::storage/storage :gene-validity-version-store])
+                [:transforms data-key offset (get versions data-key)])]
+    (when-not (= ::storage/miss result)
+      result)))
+
+(defn retrieve-saved-data
+  "Retrieve data stored from processing, unless specifically requested not to,
+  as defined by the :force-reload key."
+  [event data-keys]
+  (if (and (::event/offset event)
+           (:versions event)
+           (get-in event [::storage/storage :gene-validity-version-store]))
+    (do
+      (reduce
+       (fn [e k]
+         (-> (assoc e k (saved-data e k))))
+       event
+       (set/difference (set data-keys)
+                       (set (:force-reload event)))))
+    event))
+
+(defn mark-retrieved-data [event data-keys]
+  (assoc event
+         ::retrieved-from-store
+         (->> (select-keys event data-keys)
+              (filter val)
+              (map key)
+              set)))
+
+(defn add-saved-data-fn [event data-keys]
+  (-> event
+      (retrieve-saved-data data-keys)
+      (mark-retrieved-data data-keys)))
+
+(defn store-generated-data-fn
+  "Store data generated through processing. Specifically exclude data retrieved
+  from storage rather than being processed."
+  [event data-keys]
+  (reduce
+   (fn [e k]
+     (event/store e
+                  :gene-validity-version-store
+                  [:transforms
+                   k
+                   (::event/offset e)
+                   (get (:versions e) k)]
+                  (get event k)))
+   event
+   (set/difference (set data-keys)
+                   (::retrieved-from-store event))))
+
+(defn add-saved-data [data-keys]
+  (interceptor/interceptor
+   {:name ::add-saved-data
+    :enter (fn [e] (add-saved-data-fn e data-keys))
+    :leave (fn [e] (store-generated-data-fn e data-keys))}))
 

@@ -63,7 +63,8 @@
    ::event/iri
    :gene-validity/passed-tests
    :gene-validity/failed-tests
-   :gene-validity/valid])
+   :gene-validity/valid
+   :genegraph.transform.gene-validity.event-recorder/retrieved-from-store])
 
 (defn abbreviate [event]
   (select-keys event abbreviated-keys))

@@ -23,7 +23,7 @@
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
           (System/getenv "DX_JAAS_CONFIG")) ; prevent this in cloud deployments
-    {:platform "prod"
+    {:platform "local"
      :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG")
      :local-data-path "data/"}
     {}))
@@ -31,6 +31,9 @@
 (def local-env
   (case (or (:platform admin-env) (System/getenv "GENEGRAPH_PLATFORM"))
     "local" {:fs-handle {:type :file :base "data/base/"}
+             :versions {:gene-validity/gci-model 1
+                        :gene-validity/model 1
+                        :gene-validity/website-event 1}
              :local-data-path "data/"}
     "dev" (assoc (env/build-environment "522856288592" ["dataexchange-genegraph"])
                  :version 2
@@ -205,12 +208,31 @@
                   (add-timestamp :website-version)
                   add-publish-actions]})
 
+
+(defn tap-interceptor-fn [e]
+  (when (:tap-abbrev e)
+    (tap> (abbrev/abbreviate e)))
+  e)
+
+(def tap-interceptor
+  (interceptor/interceptor
+   {:name :tap-interceptor
+    :leave (fn [e] (tap-interceptor-fn e))}))
+
+(def saved-keys
+  #{:gene-validity/gci-model
+    :gene-validity/model
+    :gene-validity/website-event})
+
 (def transform-processor
   {:type :processor
    :name :gene-validity-transform
    :subscribe :gene-validity-complete
    :backing-store :gene-validity-version-store
-   :interceptors [recorder/record-event
+   ::event/metadata (select-keys env [:versions])
+   :interceptors [tap-interceptor
+                  recorder/record-event
+                  (recorder/add-saved-data saved-keys)
                   report-transform-errors
                   abbrev/add-initial-attributes
                   gci-model/add-gci-model

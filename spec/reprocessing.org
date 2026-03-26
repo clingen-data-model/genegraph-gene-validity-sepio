@@ -4,6 +4,90 @@ We will occasionally need to reprocess events in the case of schema changes, bug
 
 It would be convenient if this workflow were incorporated into testing as well, this way the effect of code changes would be tested using the same mechanism used to bring them into effect in production.
 
+* Discussion
+
+I want to test components of the system I'm working on, in parallel, across the entire input set, one operation at a time.
+
+This translates into testing one interceptor at a time; being able to feed it the context it needs, and testing the outcomes. Speed up the feedback loop.
+
+At the end of the day, the business logic really needs to be a pure function.
+
+And it is--until we get to the versioning stuff.
+
+I think it's possible that we can store the various intermediate products; instructions to skip them can be processed on message reprocessing.
+
+If I do local reprocessing, I'm going to need a mechanism to make sure that it completes if interrupted.
+
+Should be rare. Could always start from beginning (though don't want to repeat already read local versions...)
+
+There is an init script when starting the transform processor. It checks to make sure that the sepio stream is up-to-date at both ends.
+
+When processing, what do we write?
+
+* Proposed workflow
+
+** Incoming event -- either GCI event or local recuration event
+
+If new event, there should be no preexising anything--does not matter what models we bypass.
+
+If reprocessing event, I will have incremented the version. There should be no existing models of the same version (unless I version the GCI models and the GV models independently. Adds a bit of complexity, but makes reprocessing potentially much faster. (New deployments available in basically minutes.)
+
+Additional complexity vs quick iteration. May honestly choose quick iteration.
+
+Each transformation format has a message version: GCI model, SEPIO model, Website event
+
+For each of these, if the version exists for the current message version, grab that and send it forward into the event, *unless* there's a flag set to force recompute for that particular step.
+
+For each message, the question is: is there a current version of the event sequence [offset, version] (or version, offset)--may be easy to change later.) For reprocessing, one should simply load the current version. For dev, this may depend on what aspect of the model is being tested.
+
+For each published record, there should be a copy of the actual record (
+
+** Reprocessing workflow
+
+Look for current version of record (GCI Model, model, etc)
+
+If present, load and add to model
+
+If absent, process 
+
+At end, need to decide if any publishable artifacts have changed relative to previous version.
+
+If so, publish patch increment.
+
+If not, do not publish patch. Consider how to record that the event is unchanged in the new version for when this operation is repeated (as it will be)
+
+*** Issues
+
+How to record no-op changes. (publish no-op record).
+
+Do we re-read entire history on startup? Do we instead record where things have left off? (yes, but probably sufficient to read set of summary records, rather than reprocessing entire sequence--can revisit)
+
+Should be feasible given the primitives for Kafka topics, but need to make sure local store is fully constructed and up to date before processing new messages. The usual situation will be that the local store is loaded from a snapshot, but need to consider the exceptional cases. (need to construct processor for building output topic, input processor needs to await output processor reporting up to date; can inspect mechanism used to await gene data.
+
+** Dev workflow 
+
+Here I'm generally going to be running a specific step of the workflow. Need to be able to run things to completion, summarize the results, and zoon in on specific events (favors the offset, vesion pattern.)
+
+Ideally this will look as similar as possible to the reprocessing workflow; both get tested at the same time and I get to avoid special cases.
+
+I can put a message in with a 'force reprocess' flag for a given sequence. At that point, any downstream events should be reprocessed too.
+
+* System versioning
+
+Up to this point the GCI model transformation and the SEPIO model transformation have been layered together. If I consider them to be separate parts of the process, it might be easier to iterate over improements to the model, as well as economize on storage.
+
+GCI Model: this depends entirely on pre-model edits and the JSON-LD context file that gets applied.
+
+SEPIO Transform
+
+Version application
+
+Website Event
+
+I'm testing one interceptor at a time.
+
+There might be a HEAD version for development--always gets overwritten?
+
 * Alternatives for republishing events
 
 ** Reset consumer group, reprocess topic
@@ -28,6 +112,39 @@ Since we're tracking the GV offset locally anyway it may be unecessary to use th
 
 Working up the local storage solution
 
+** Data
+
+*** Sequential IDs
+
+Incoming messages from the GCI have offsets on the topic, which provides a solid id for the messages
+
+Downstream messages don't have this until they exist on the output stream. For this and other reasons offsets probably shouldn't be the message identifier going downstream.
+
+We *do* need a persistent sequence; I need to know the order these messages should be processed in; at least at the key level.
+
+This feels like a reversable choice; this would be mostly private to this system.
+
+Worth noting that semantic versioning will not produce lexographic ordering on its own, which is probably necessary.
+
+**** Timestamp
+
+Consistent and sequential.
+IDs will not be consistent in dev
+
+**** GDM + sequence
+
+Ordering first by curation then by sequence. This feels best. We can version internally by sequence, Externally we use semantic versioning (a bit like a github tag)
+
+**** Mirroring original sequence
+
+Will remain consistent with original ordering.
+
+*** GCI Model
+
+This doesn't change as much as the SEPIO model.  When should it be recomputed?
+
+Computing this is also the most expensive operation
+
 ** Topics
 
 We are discontinuing using consumer groups. This will significantly reduce the complexity of Kafka integration at the cost of possibly duplicating messages on topic. I think the simplicity is worthwhile.
@@ -42,4 +159,53 @@ transform-gv
 rocks: everything persisitent
 atom: Might try using this for coordination between producers, though maybe not needed with the appropriate init-fn? Will hold off, but this could be handy
 
-** 
+** Processors
+
+*** Recieve gene-validity-message
+
+This processor:
+Recieves a message from gene-validity-all
+
+*** Transform gene-validity-message
+
+Standard transformer established up to this point.
+
+Need to decide how to handle output data.
+
+I'd like to have one message with all necessary data. I can either encode this as a nippy message with all the various serializations, I can rely on one serialization, or I can futz together an edn coded message instead. Choosing nippy will mean changing the serialization logic to handle byte arrays; right now everything depends on string serialization.
+
+I'd like to be able to support binary encoding; I need to carefully consider whether I want to spend more time on this now.
+
+**** One message as source of truth
+
+Strongly prefer this. Two options
+
+***** Everything in RDF Model
+
+This seems like the way to go if I don't want to change everything.
+
+***** Write some sort of EDN monstrosity
+
+I think I would want to have nippy available if we went this route
+
+***** Write to cloud storage, kafka event is a reference
+
+**** Reassemble all output messages
+
+This seems intolerable, although if we start bumping up against size limits in Kafka, we might need to make some adjustments.
+
+*** Generate snapshot
+
+Having the snapshot generator in a separate process seems a bit inappropriate at this point. All the relevant data is already stored in this process.  Additionally, we can make snapshot generation occur whenever data is updated, which is a plus.
+
+** Data flow
+
+* Additional support
+
+** EDN->RDF->EDN
+
+Have written code for edn->rdf. Need code for the inverse operation.
+
+Both should be based on a coherent data model and schema.
+
+Maybe this is a bigger problem than I want to solve right now. Should probably revisit it sometime in the future.

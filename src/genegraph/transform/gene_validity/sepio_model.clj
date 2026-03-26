@@ -1,6 +1,7 @@
 (ns genegraph.transform.gene-validity.sepio-model
   (:require [clojure.edn :as edn]
             [genegraph.framework.storage.rdf :as rdf]
+            [genegraph.framework.storage :as storage]
             [genegraph.framework.event :as event]
             [genegraph.transform.gene-validity.names]
             [clojure.java.io :as io]
@@ -236,6 +237,18 @@ select ?gdm where
   (if (= :cg/Publisher (:publishRole params))
     (publish-action gci-data params)
     (unpublish-action gci-data params)))
+
+(defn existing-model [{::event/keys [offset]
+                       :keys [model-version]
+                       :as event}]
+  (when (and (not (get-in event [:force-reload :gene-validity/model]))
+             offset
+             model-version
+             (get-in event [::storage/storage :gene-validity-version-store]))
+    (let [result (storage/read
+                  (get-in event [::storage/storage :gene-validity-version-store])
+                  [:transforms :gene-validity/model model-version])]
+      (when-not (= ::storage/miss result) result))))
 
 (defn add-model-fn [event]
   (assoc event

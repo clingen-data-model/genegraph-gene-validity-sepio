@@ -45,7 +45,7 @@
 (def assertion-query
   (rdf/create-query "select ?x where { ?x a :cg/EvidenceStrengthAssertion }" ))
 
-(defn record-gv-curation-fn [e]
+#_(defn record-gv-curation-fn [e]
   (if-let [assertion (-> e ::event/data assertion-query first)]
     (if-let [original-version (rdf/ld1-> assertion [:dc/isVersionOf])]
       (event/store e
@@ -55,6 +55,20 @@
                    (::event/data e))
       e)
     e))
+
+(defn create-record-output-processor [topic]
+  (let [n (keyword (str (name topic) "-output"))
+        i (interceptor/interceptor
+           {:name n
+            :enter (fn [e] (log/info :output-topic topic))})]
+    {:type :processor
+     :name n
+     :subscribe topic
+     :interceptors [i]}))
+
+(defn record-gv-curation-fn [e]
+  (log/info :fn :record-curation
+            :curation (-> e ::event/data assertion-query first str)))
 
 (def record-gv-curation
   {:name :record-gv-curation
@@ -82,13 +96,21 @@
              :name :gene-validity-sepio}
             :gene-validity-sepio-jsonld
             {:type :simple-queue-topic
-             :name :gene-validity-sepio-jsonld}}
+             :name :gene-validity-sepio-jsonld}
+            :all-curation-events
+            {:type :simple-queue-topic
+             :name :all-curation-events}}
    :storage {:gene-validity-version-store
              (assoc gv/gene-validity-version-store :reset-opts {})
              :curation-output curation-output}
    :processors {:gene-validity-transform (assoc gv/transform-processor
                                                 :type :parallel-processor)
-                :record-output-processor record-output-processor}})
+                :gene-validity-sepio-output
+                (create-record-output-processor :gene-validity-sepio)
+                :gene-validity-jsonld-output
+                (create-record-output-processor :gene-validity-sepio-jsonld)
+                :all-curation-events-output
+                (create-record-output-processor :all-curation-events)}})
 
 
 (comment
@@ -348,18 +370,38 @@ select ?el where {
                         ::event/skip-local-effects true
                         ::event/skip-publish-effects true))))
 
+  (p/stop test-app)
+  (type test-app)
   
 
   (def source-file
     "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-03-18.edn.gz")
 
+  (event-store/with-event-reader [r source-file]
+    (run! #(p/publish (get-in test-app [:topics :gene-validity-complete])
+                      %)
+          (->> (event-store/event-seq r)
+               (map #(assoc %
+                            :tap-abbrev true
+                            :force-reload #{:gene-validity/model
+                                            :gene-validity/website-event}))
+               (take 1))))
+
+  (event-store/with-event-reader [r source-file]
+    (tap>
+     (into []
+           (comp (take 1)
+                 (map keys))
+           (event-store/event-seq r))))
+
   ;; Testing predicates
   (event-store/with-event-reader [r source-file]
     (tap>
      (into []
-           (comp (take 10)
+           (comp (take 1)
                  (map transform-curation)
-                 (map abbrev/abbreviate)
+                 (map #(dissoc % :gene-validity/gci-model :gene-validity/model))
+                 #_(map abbrev/abbreviate)
                  #_(remove :gene-validity/valid))
            (event-store/event-seq r))))
 
