@@ -15,11 +15,13 @@
                 (= 1 (count ((rdf/create-query "select ?x where { ?x a :cg/Statement }") model))))}
    {:name :has-kafka-iri
     :check-fn (fn [event] (seq (::event/iri event)))}
+   {:name :has-gdm
+    :check-fn :gene-validity/gdm}
    #_{:name :has-legacy-website-id
-    :when publish?
-    :check-fn (fn [{:gene-validity/keys [model]}]
-                (seq ((rdf/create-query
-                       "select ?id where { ?a :cg/websiteLegacyID ?id }") model)))}
+      :when publish?
+      :check-fn (fn [{:gene-validity/keys [model]}]
+                  (seq ((rdf/create-query
+                         "select ?id where { ?a :cg/websiteLegacyID ?id }") model)))}
    {:name :has-evaluated-contribution
     :when publish?
     :check-fn (fn [{:gene-validity/keys [model]}]

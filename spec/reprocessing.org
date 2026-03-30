@@ -110,7 +110,7 @@ Since we're tracking the GV offset locally anyway it may be unecessary to use th
 
 * Architecture
 
-Working up the local storage solution
+Fairly committed to the local storage solution. Kafka consumer groups for per
 
 ** Data
 
@@ -144,6 +144,12 @@ Will remain consistent with original ordering.
 This doesn't change as much as the SEPIO model.  When should it be recomputed?
 
 Computing this is also the most expensive operation
+
+*** Summary data
+
+This needs to be derivable from the published, RDF sepio model.
+
+What information do I need in the summary record? Ideally we keep this as brief as possible and mostly easily queriable from the gene validity model.
 
 ** Topics
 
@@ -199,6 +205,14 @@ This seems intolerable, although if we start bumping up against size limits in K
 Having the snapshot generator in a separate process seems a bit inappropriate at this point. All the relevant data is already stored in this process.  Additionally, we can make snapshot generation occur whenever data is updated, which is a plus.
 
 ** Data flow
+
+Officially cutting ties with the consumer group for this transformation. All state to be handled by local storage.
+
+Reading Gene Validity Complete (could even switch back to raw and pre-load existing curations)
+
+
+
+
 
 * Additional support
 

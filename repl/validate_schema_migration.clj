@@ -90,7 +90,8 @@
   {:type :genegraph-app
    :topics {:gene-validity-complete
             {:type :simple-queue-topic
-             :name :gene-validity-complete}
+             :name :gene-validity-complete
+             :serialization :json}
             :gene-validity-sepio
             {:type :simple-queue-topic
              :name :gene-validity-sepio}
@@ -99,12 +100,16 @@
              :name :gene-validity-sepio-jsonld}
             :all-curation-events
             {:type :simple-queue-topic
-             :name :all-curation-events}}
+             :name :all-curation-events}
+            :transform-topic
+            {:type :simple-queue-topic
+             :name :transform-topic}}
    :storage {:gene-validity-version-store
              (assoc gv/gene-validity-version-store :reset-opts {})
              :curation-output curation-output}
    :processors {:gene-validity-transform (assoc gv/transform-processor
                                                 :type :parallel-processor)
+                :gci-event-processor gv/gci-event-processor
                 :gene-validity-sepio-output
                 (create-record-output-processor :gene-validity-sepio)
                 :gene-validity-jsonld-output
@@ -388,6 +393,16 @@ select ?el where {
                (take 1))))
 
   (event-store/with-event-reader [r source-file]
+    (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
+          (take 5 (event-store/event-seq r))))
+
+  (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
+                          {:prefix [:events :gene-validity-complete]
+                           :return-ref true})
+       count)
+
+  
+  (event-store/with-event-reader [r source-file]
     (tap>
      (into []
            (comp (take 1)
@@ -478,4 +493,6 @@ select ?el where {
   
   ;; website legacy id appears broken, maybe OK to get rid of it
 
-  (p/stop test-app))
+  (p/stop test-app)
+  (tap> test-app)
+  )

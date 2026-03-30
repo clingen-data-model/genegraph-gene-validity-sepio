@@ -1,5 +1,6 @@
 (ns genegraph.transform.gene-validity.event-recorder
-  (:require [genegraph.framework.storage :as storage]
+  (:require [genegraph.transform.gene-validity.abbreviate :as abbrev]
+            [genegraph.framework.storage :as storage]
             [genegraph.framework.event :as event]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
@@ -95,9 +96,33 @@
    (set/difference (set data-keys)
                    (::retrieved-from-store event))))
 
+;; come back here after reliable method of getting GDM
+;; ID
+(defn store-event-outcome [event]
+  (if-let [gdm (:gene-validity/gdm event)]
+    (event/store event
+                 :gene-validity-version-store
+                 [:outcomes
+                  gdm
+                  (::event/offset event)
+                  (get-in event [:versions :gene-validity/model])]
+                 (abbrev/abbreviate event))
+    (do
+      (log/warn :fn :store-event-outcome
+                :error :no-gdm)
+      event)))
+
+(defn store-results [event data-keys]
+  (-> event
+      (store-generated-data-fn data-keys)
+      store-event-outcome))
+
 (defn add-saved-data [data-keys]
   (interceptor/interceptor
    {:name ::add-saved-data
     :enter (fn [e] (add-saved-data-fn e data-keys))
-    :leave (fn [e] (store-generated-data-fn e data-keys))}))
+    :leave (fn [e] (store-results e data-keys))}))
+
+
+
 

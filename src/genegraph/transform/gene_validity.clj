@@ -13,6 +13,7 @@
             [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.storage.rdf.jsonld :as jsonld]
             [genegraph.framework.storage :as storage]
+            [genegraph.framework.storage.rocksdb :as rocksdb]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
             [clojure.java.io :as io]
@@ -85,6 +86,14 @@
                      "org.apache.kafka.common.serialization.StringSerializer"
                      "value.serializer"
                      "org.apache.kafka.common.serialization.StringSerializer"}})
+
+(defn reprocess-events [app]
+  (->> (rocksdb/range-get @(get-in app [:storage :gene-validity-version-store :instance])
+                          {:prefix [:events :gene-validity-complete]
+                           :return :ref})
+       (map deref)
+
+       (run! #(p/publish (get-in app [:topics :transform-topic]) %))))
 
 (def gene-validity-version-store
   {:name :gene-validity-version-store
@@ -227,8 +236,8 @@
 (def transform-processor
   {:type :processor
    :name :gene-validity-transform
-   :subscribe :gene-validity-complete
-   :backing-store :gene-validity-version-store
+   :subscribe :transform-topic
+   #_#_:backing-store :gene-validity-version-store
    ::event/metadata (select-keys env [:versions])
    :interceptors [tap-interceptor
                   recorder/record-event
@@ -245,6 +254,29 @@
                   website-event/website-version-interceptor
                   validation/validate
                   add-publish-actions]})
+
+(defn gci-event-fn [event]
+  (-> event
+      (event/store
+       :gene-validity-version-store
+       [:events :gene-validity-complete (::event/offset event)]
+       (select-keys event [::event/key
+                           ::event/data
+                           ::event/offset
+                           ::event/kafka-topic
+                           ::event/timestamp]))))
+
+(def gci-event
+  (interceptor/interceptor
+   {:name ::gci-event
+    :enter (fn [e] (gci-event-fn e))}))
+
+(def gci-event-processor
+  {:type :processor
+   :name :gci-event-processor
+   :subscribe :gene-validity-complete
+   :backing-store :gene-validity-version-store
+   :interceptors [gci-event]})
 
 (def gene-validity-complete-topic
   {:name :gene-validity-complete
@@ -291,6 +323,9 @@
                    :kafka-consumer-group consumer-group
                    :buffer-size 5
                    :reset-opts {})
+            :transform-topic
+            {:name :transform-topic
+             :type :simple-queue-topic}
             :gene-validity-sepio
             (assoc gene-validity-sepio-topic
                    :type :kafka-producer-topic
