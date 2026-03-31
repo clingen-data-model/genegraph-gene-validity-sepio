@@ -251,10 +251,11 @@ select ?gdm where
       (when-not (= ::storage/miss result) result))))
 
 (defn add-model-fn [event]
-  (assoc event
-         :gene-validity/model
-         (gci-data->sepio-model (:gene-validity/gci-model event)
-                                (params-for-construct event))))
+  (let [m (gci-data->sepio-model (:gene-validity/gci-model event)
+                                 (params-for-construct event))]
+    (assoc event
+           :gene-validity/model m
+           :gene-validity/unmodified-model (rdf/union m))))
 
 (def add-model
   (interceptor/interceptor

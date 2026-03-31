@@ -33,6 +33,7 @@
   (case (or (:platform admin-env) (System/getenv "GENEGRAPH_PLATFORM"))
     "local" {:fs-handle {:type :file :base "data/base/"}
              :versions {:gene-validity/gci-model 1
+                        :gene-validity/unmodified-model 1
                         :gene-validity/model 1
                         :gene-validity/website-event 1}
              :local-data-path "data/"}
@@ -92,7 +93,6 @@
                           {:prefix [:events :gene-validity-complete]
                            :return :ref})
        (map deref)
-
        (run! #(p/publish (get-in app [:topics :transform-topic]) %))))
 
 (def gene-validity-version-store
@@ -219,8 +219,13 @@
 
 
 (defn tap-interceptor-fn [e]
-  (when (:tap-abbrev e)
-    (tap> (abbrev/abbreviate e)))
+  (when (:pp-model e) (rdf/pp-model (:gene-validity/model e)))
+  (cond (:tap-abbrev e) (tap> (abbrev/abbreviate e))
+        (:tap-without-models e) (tap> (dissoc e
+                                              :gene-validity/gci-model
+                                              :gene-validity/model
+                                              :gene-validity/unmodified-model))
+        (:tap-all e) (tap> e)) 
   e)
 
 (def tap-interceptor
@@ -231,6 +236,7 @@
 (def saved-keys
   #{:gene-validity/gci-model
     :gene-validity/model
+    :gene-validity/unmodified-model
     :gene-validity/website-event})
 
 (def transform-processor
@@ -247,6 +253,7 @@
                   gci-model/add-gci-model
                   abbrev/add-gci-model-attributes
                   sepio-model/add-model
+                  recorder/add-previous-version
                   versioning/add-version
                   add-jsonld
                   add-iri

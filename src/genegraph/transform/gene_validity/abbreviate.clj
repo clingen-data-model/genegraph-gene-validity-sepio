@@ -36,8 +36,14 @@
       :cg/Submitted
       :cg/Unpublished)))
 
+(defn gdm [event]
+  (let [q (rdf/create-query "select ?gdm where { ?gdm a :gg/gdm }")]
+    (-> event :gene-validity/gci-model q first str)))
+
 (defn add-gci-model-attributes-fn [event]
-  (assoc event :cg/activityType (activity-type event)))
+  (assoc event
+         :cg/activityType (activity-type event)
+         :gene-validity/gdm (gdm event)))
 
 (def add-gci-model-attributes
   (interceptor/interceptor
@@ -50,9 +56,7 @@
     (assoc event key result)))
 
 (def model-attribute-queries
-  [[:gene-validity/gdm
-    "select ?p where { ?s a :cg/Statement ; :dc/isVersionOf ?p }"]
-   [:gene-validity/gene
+  [[:gene-validity/gene
     "select ?g where { ?s a :cg/GeneValidityProposition ; :cg/subject ?g }"]
    [:gene-validity/disease
     "select ?g where { ?s a :cg/GeneValidityProposition ; :cg/object ?g }"]

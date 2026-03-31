@@ -61,12 +61,14 @@
    (event-store/with-event-reader [r source-file]
      (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
            (event-store/event-seq r))))
-  
+
   (time
    (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
                            {:prefix [:events :gene-validity-complete]
-                            :return-ref true})
-        count))
+                            :return :ref})
+        (take 1)
+        (map deref)
+        tap>))
   )
 
 (def prop-query
@@ -192,14 +194,31 @@
 ;; approach, as it does not lend itself to reprocessing portions of the data
 ;; incrementally (but rather requires dumping portions of the database).
 
+;; having trouble with the way we're handling renaming the proposition
+;; I'm using a Genegraph value object id for the proposition, (rather than the GDM ID)
+;; This more accurately reflects its nature, and allows it to fit in more nicely with
+;; GV curations from other sources.
+
+;; Discovered the problem is with the way versioning renames things. Will
+;; take the unmodified (sepio) model and handle it differently.
+
 (comment
+  (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
+                          {:prefix [:events :gene-validity-complete]
+                           :return :ref})
+       (take 1)
+       (map deref)
+       (map #(assoc %
+                    :tap-without-models true
+                    #_#_:pp-model true))
+       (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
+  
   (time (gv/reprocess-events test-app))
 
   (->> (storage/scan @(get-in test-app
                               [:storage :gene-validity-version-store :instance])
                      [:outcomes])
-       (take 1)
-       tap>)
+       count)
 
   ;; check for type of failed tests
   (->> (storage/scan @(get-in test-app

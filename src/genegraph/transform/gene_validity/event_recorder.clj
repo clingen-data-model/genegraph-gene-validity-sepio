@@ -123,6 +123,58 @@
     :enter (fn [e] (add-saved-data-fn e data-keys))
     :leave (fn [e] (store-results e data-keys))}))
 
+(defn model-from-previous-data-version [event]
+  (let [m (storage/read
+              (get-in event [::storage/storage
+                             :gene-validity-version-store])
+              [:transforms
+               :gene-validity/unmodified-model
+               (::event/offset event)
+               (dec (get-in event [:versions
+                                   :gene-validity/unmodified-model]))])]
+    (if (= ::storage/miss m)
+      nil
+      m)))
 
+(defn model-from-previous-data-version [event]
+  (let [m (storage/read
+           (get-in event [::storage/storage
+                             :gene-validity-version-store])
+              [:transforms
+               :gene-validity/unmodified-model
+               (::event/offset event)
+               (dec (get-in event [:versions
+                                   :gene-validity/unmodified-model]))])]
+    (if (= ::storage/miss m)
+      nil
+      m)))
 
+(defn add-model-from-previous-publish-event [event]
+  (let [store (get-in event [::storage/storage
+                             :gene-validity-version-store]
+                      [:outcomes (:gene-validity/gdm event)])]
+    (if-let [last-outcome (->> (storage/scan
+                                store
+                                [:outcomes (:gene-validity/gdm event)])
+                               (filter #(< (::event/offset %) (::event/offset event)))
+                               last)]
+      (let [m (storage/read store [:transforms
+                                   :gene-validity/unmodified-model
+                                   (::event/offset last-outcome)
+                                   (get-in event [:versions :gene-validity/unmodified-model])])]
+        (assoc event
+               :gene-validity/previous-model m
+               :gene-validity/last-outcome last-outcome))
+      event)))
 
+(defn add-previous-version-fn [event]
+  (if-let [m1 (model-from-previous-data-version event)]
+    (assoc event
+           :gene-validity/previous-model m1
+           :gene-validity/patch-release true)
+    (add-model-from-previous-publish-event event)))
+
+(def add-previous-version
+  (interceptor/interceptor
+   {:name ::add-previous-version
+    :enter (fn [e] (add-previous-version-fn e))}))

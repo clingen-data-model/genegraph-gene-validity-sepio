@@ -395,15 +395,10 @@ construct {
                       :gene-validity/approval-date
                       :gene-validity/change-records
                       :gene-validity/website-event])]
-    (-> event
-        (event/store :gene-validity-version-store
-                     [::last-version (::proposition-iri event)]
-                     event-elements-to-store)
-        (event/store :gene-validity-version-store
-                     [::last-version
-                      (::proposition-iri event)
-                      (:gene-validity/version event)]
-                     event-elements-to-store))))
+    (event/store event
+                 :gene-validity-version-store
+                 [::last-version (::proposition-iri event)]
+                 event-elements-to-store)))
 
 (defn add-version-increment-given-change [event prior-event]
   (let [prior-version (:gene-validity/version prior-event)]
