@@ -1,0 +1,251 @@
+* Last-Outcome Chain Integrity
+
+Investigation of race conditions and correctness issues in how
+=:gene-validity/last-outcome= is populated when processing events
+through the transform pipeline.
+
+** Background
+
+Each published GV curation event is stored in RocksDB under
+=[:outcomes gdm offset data-version]=. The =add-previous-version=
+interceptor scans this store to find the most recent prior submitted
+event for the same GDM and attaches it as =:gene-validity/last-outcome=
+on the current event. Versioning logic depends on this field to
+determine whether the current event is a first curation, patch release,
+minor change, or recuration.
+
+** Race Condition with =ParallelProcessor=
+
+*** Mechanism
+
+In the test harness, =transform-processor= is overridden to type
+=:parallel-processor= with =:key-fn gdm-id=. The parallel processor has
+three threads:
+
+1. Deserialize thread — polls topic, deserializes event, pushes to
+   =deserialized-event-queue=
+2. Dispatch thread — pulls from =deserialized-event-queue=, calls
+   =process-gated-parallel-event=, pushes future to =effect-queue=
+3. Effects thread — pulls completed futures from =effect-queue=, calls
+   =process-event-effects!=
+
+The user-defined interceptor chain runs inside a =future= (in a thread
+pool, not the dispatch thread). Effects (RocksDB writes) execute in the
+effects thread /after/ the future completes.
+
+The race:
+- Event A's interceptor chain starts → =add-previous-version= reads RocksDB (miss for first
+  curation) → chain completes → future put in =effect-queue=
+- Event B's interceptor chain starts (concurrently, different thread) → =add-previous-version=
+  reads RocksDB → A's write has not executed yet (still in =effect-queue=) → sees the same miss
+- Effects thread processes A → RocksDB write commits
+- Effects thread processes B → writes with wrong =last-outcome=
+
+*** Gate Mechanism
+
+=process-gated-parallel-event= is designed to prevent this. It calls
+=await-prior-event= which derefs the prior event's
+=::event/completion-promise= before dispatching the next event for the
+same key. The =completion-promise= is delivered /after/
+=perform-local-effects!= runs (i.e., after the RocksDB write commits).
+So if the gate works, B cannot start until A's write has committed.
+
+*** Why the Gate May Not Work
+
+=gate-fn= is called as =(gate-fn (::event/data event))=, passing the
+raw JSON data map, not the full event. =gdm-id= is defined as:
+
+#+begin_src clojure
+(defn gdm-id [e]
+  (or (get-in e [::event/data :resourceParent :gdm :PK])
+      (get-in e [::event/data :resourceParent :gdm :uuid])
+      (get-in e [::event/data :properties :resourceParent :gdm :uuid])))
+#+end_src
+
+When called with the raw data map (not the event), =(get-in data
+[::event/data ...])= returns =nil= for every event. All events get gate
+key =nil=, which serializes all events regardless of GDM — functionally
+correct but not the intended per-GDM partitioning. Whether this actually
+prevents the race depends on whether the nil-key gate accumulates
+correctly across all events.
+
+*** Confirming the Race
+
+Check for multiple events with version ={:major 1 :minor 0 :patch 0}=
+for the same GDM:
+
+#+begin_src clojure
+(let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+  (->> (storage/scan store [:outcomes])
+       (group-by :gene-validity/gdm)
+       (filter (fn [[_ outcomes]]
+                 (> (->> outcomes
+                         (filter #(= {:major 1 :minor 0 :patch 0}
+                                     (:gene-validity/version %)))
+                         count)
+                    1)))
+       count))
+;; Non-zero = race confirmed (multiple first-curation versions for same GDM)
+#+end_src
+
+Or check chain integrity (see below).
+
+** Confirming a Deferred Write Has Committed
+
+=event/store= creates a =:commit-promise= per effect. RocksDB's =write=
+method delivers this promise to =true= synchronously after =.put=
+completes. The event's =::event/completion-promise= (if set) is
+delivered only after all =:commit-promise= values in =::event/effects=
+are realized.
+
+To block until a specific event's writes have committed:
+
+#+begin_src clojure
+;; Attach a completion-promise before publishing
+(p/publish (get-in test-app [:topics :transform-topic])
+           (assoc event ::event/completion-promise (promise)))
+
+;; Or check individual effects after p/process:
+(let [result (p/process (get-in test-app [:processors :gene-validity-transform])
+                        (assoc event ::event/completion-promise (promise)))]
+  (doseq [{:keys [commit-promise store]} (::event/effects result)]
+    (println store (deref commit-promise 5000 :timeout))))
+#+end_src
+
+The gate mechanism in =ParallelProcessor= uses this: =await-prior-event=
+derefs the prior event's =completion-promise= which only fires after
+=perform-local-effects!= has run. So if the gate key is computed
+correctly, there is no write-visibility race.
+
+** RocksDB Write Visibility
+
+RocksDB's =.put= (called by =rocks-write!=) is synchronous — once it
+returns, any subsequent =.get= on the same instance will see the value,
+regardless of thread. There is no buffering or async path. The
+=commit-promise= being delivered immediately after confirms this.
+
+The one potential exception — iterators — does not apply here.
+=range-get= opens a fresh iterator via =with-open= on each call, so
+every scan sees the latest committed state.
+
+*The race is not a RocksDB visibility issue.* A write that has not yet
+been called (because effects are deferred until after the interceptor
+chain) simply does not exist in the store. If event B reads before event
+A's deferred effects have executed, the key is absent — not stale.
+
+** Broken Link Check (700 of 7000 with Single-Threaded Processor)
+
+After switching to a single-threaded =:processor=, the write executes
+synchronously via =process-event-effects!= before the next event is
+polled. There is no timing race. Remaining broken links have structural
+causes.
+
+*** False Positives in the Integrity Check
+
+The naive check compares consecutive elements in scan order:
+
+#+begin_src clojure
+;; WRONG — flags legitimate skips over non-submitted events
+(partition 2 1 (sort-by ::event/offset outcomes))
+#+end_src
+
+=last-outcome= only chains through /submitted/ events. If GDM X has
+events at offsets 100 (submitted), 200 (draft), 300 (submitted), event
+300's =last-outcome= correctly points to 100 (skipping 200). The naive
+check flags the =[200, 300]= pair as broken.
+
+Correct check — compare only consecutive submitted outcomes:
+
+#+begin_src clojure
+(let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+      submitted? #(get (:gene-validity/activity %) :cg/Submitted)]
+  (->> (storage/scan store [:outcomes])
+       (group-by :gene-validity/gdm)
+       (filter #(> (count (val %)) 1))
+       (map (fn [[gdm outcomes]]
+              (let [submitted (->> outcomes
+                                   (sort-by ::event/offset)
+                                   (filter submitted?))
+                    broken (filter (fn [[prev curr]]
+                                     (not= (::event/offset prev)
+                                           (::event/offset (:gene-validity/last-outcome curr))))
+                                   (partition 2 1 submitted))]
+                {:gdm gdm :broken (count broken)})))
+       (filter #(pos? (:broken %)))
+       count))
+#+end_src
+
+*** Events Silently Dropped from Outcomes Store
+
+=store-event-outcome= guards on =:gene-validity/gdm= and logs a warning
+if nil, returning the event without storing:
+
+#+begin_src clojure
+(if-let [gdm (:gene-validity/gdm event)]
+  ...
+  (do (log/warn :fn :store-event-outcome :error :no-gdm) event))
+#+end_src
+
+=:gene-validity/gdm= is set by =add-gci-model-attributes-fn= via a
+SPARQL query on the GCI model. If the GCI model is empty or the query
+returns nothing, =(first ... str)= produces ="= (empty string), not
+=nil=. An empty string is truthy, so the event is stored — but under a
+hash of ="=, not the actual GDM IRI. These outcomes are invisible to
+subsequent events scanning for the correct GDM IRI.
+
+Check for misfiled outcomes:
+
+#+begin_src clojure
+(->> (storage/scan store [:outcomes])
+     (filter #(= "" (:gene-validity/gdm %)))
+     count)
+#+end_src
+
+*** Stale Outcomes from a Previous Run
+
+The test app uses =:reset-opts {}= (no reset). Outcomes written by a
+previous run (e.g., a parallel-processor run with broken chains) remain
+in the store. A full sequential reprocess overwrites each
+=[:outcomes gdm offset version]= slot — but only for events that
+complete without error. Any event that throws mid-chain will not
+overwrite its stale outcome, leaving a broken link in place for
+subsequent events in the same GDM.
+
+Definitive test: run with a clean store:
+
+#+begin_src clojure
+;; In test-app-def, change:
+:storage {:gene-validity-version-store
+          (assoc gv/gene-validity-version-store
+                 :reset-opts {:destroy-snapshot true})}
+#+end_src
+
+A large drop in broken links confirms stale data was the primary cause.
+Remaining links after a clean run point to the empty-string GDM issue
+or logic bugs in the submitted filter.
+
+** Summary of Causes
+
+| Cause | Detectable by |
+|--------------------------------------------+-----------------------------------------------|
+| Parallel processor race (no gate or wrong key) | Multiple v1.0 outcomes for same GDM |
+| Naive integrity check (non-submitted events) | Corrected check returns lower count |
+| Empty-string GDM IRI from failed SPARQL | =:gene-validity/gdm= = ="= in outcomes |
+| Stale outcomes from prior run | Clean-store rerun drops broken link count |
+| Event exception mid-chain, effects not run | Events in =:events= store absent from =:outcomes= store |
+
+** Diagnosing Events Missing from Outcomes
+
+Events stored by =gci-event-processor= but absent from the outcomes
+store indicate a processing failure in the transform pipeline:
+
+#+begin_src clojure
+(let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+      outcome-offsets (->> (storage/scan store [:outcomes])
+                           (map ::event/offset)
+                           set)]
+  (->> (rocksdb/range-get store {:prefix [:events :gene-validity-complete]})
+       (map ::event/offset)
+       (remove outcome-offsets)
+       count))
+#+end_src

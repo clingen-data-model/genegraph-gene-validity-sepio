@@ -2,321 +2,13 @@
   (:require [genegraph.framework.event :as event]
             [genegraph.framework.storage :as storage]
             [genegraph.framework.storage.rdf :as rdf]
-            [genegraph.framework.id :as id]
+            [genegraph.transform.gene-validity.proposition :as proposition]
+            [genegraph.transform.gene-validity.changes :as changes]
+            [genegraph.transform.gene-validity.abbreviate :as abbrev]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
             [clojure.set :as set])
   (:import [java.time Instant]))
-
-(id/register-type {:type :cg/GeneValidityProposition
-                   :defining-attributes
-                   [:cg/subject :cg/object :cg/qualifier :cg/predicate]})
-
-(defn as-query [query]
-  (if (string? query) (rdf/create-query query) query))
-
-(defn summary-change-record [old-model new-model]
-  (let [q (rdf/create-query "
-select ?o where { ?o a :cg/Statement . }")
-        summary (fn [m] (rdf/ld1-> (first (q m)) [:dc/description]))
-        old-summary (summary old-model)
-        new-summary (summary new-model)]
-    (if (not= old-summary new-summary)
-      {:cg/changeType :cg/summaryChange
-       :cg/previousVersion old-summary
-       :cg/currentVersion new-summary})))
-
-(defn new-evidence-change-record [old-model new-model]
-  (let [q (rdf/create-query "
-select ?o where {
- ?e :dc/source ?o . } ")
-        old-evidence (->> (q old-model) (map str) set)
-        new-evidence (->> (q new-model) (map str) set)]
-    #_(tap> {:old-evidence old-evidence
-           :new-evidence new-evidence})
-    (if (not= old-evidence new-evidence)
-      {:cg/changeType :cg/newEvidence
-       :cg/previousVersion old-evidence
-       :cg/currentVersion new-evidence})))
-
-(defn simple-query-change-record-fn [{:keys [query change-type]}]
-  (fn [old-model new-model]
-    (let [q (as-query query)
-          old-record (-> old-model q first str)
-          new-record (-> new-model q first str)]
-      (if (not= (first (q old-model)) (first (q new-model)))
-        {:cg/changeType change-type
-         :cg/previousVersion old-record
-         :cg/currentVersion new-record}))))
-
-(defn summary-query [m]
-  (let [q (rdf/create-query "
-select ?o where { ?o a :cg/Statement . }")]
-    (rdf/ld-> (first (q m)) [:dc/description])))
-
-(def change-record-list
-  [{:change-type :cg/classificationChange
-    :query "select ?o where { ?a :cg/classification ?o }"
-    :required true}
-   {:change-type :cg/diseaseIDChange
-    :query "select ?o where { ?a a :cg/GeneValidityProposition ; :cg/object ?o }"
-    :required true}
-   {:change-type :cg/MOIChange
-    :query "select ?o where {
- ?a a :cg/GeneValidityProposition ;
- :cg/qualifier ?o }"
-    :required true}
-   {:change-type :cg/expertPanelChange
-    :query "select ?o where {
- ?a :cg/activityType :cg/Evaluated ;
- :cg/contributor ?o . }"
-    :required true}
-   {:change-type :cg/SOPChange
-    :query "select ?o where {
- ?a a :cg/Statement ;
- :cg/specifiedBy ?o . }"
-    :required true}
-   {:change-type :cg/summaryChange
-    #_#_:fn summary-change-record
-    :query summary-query
-    :required true}
-   {:change-type :cg/newEvidence
-    :fn new-evidence-change-record}])
-
-
-(defn valid-event? [e]
-  (not
-   (some #(-> e :gene-validity/model % seq not)
-         (->> change-record-list
-              (filter :required)
-              (mapv #(as-query (:query %)))))))
-
-(def change-type->object-type
-  {:cg/classificationChange :resource
-   :cg/diseaseIDChange :resource
-   :cg/MOIChange :resource
-   :cg/expertPanelChange :resource
-   :cg/SOPChange :resource
-   :cg/summaryChange :string
-   :cg/newEvidence :resource-list})
-
-(def change-record-list-fns
-  (mapv (fn [r]
-          (if (:fn r)
-            r
-            (assoc r :fn (simple-query-change-record-fn r))))
-        change-record-list))
-
-;; CLASSIFICATION_CHANGE	The classification has changed as a result of this recuration
-
-(defn classification-change? [old-model new-model]
-  (let [q (rdf/create-query "select ?o where { ?a :cg/classification ?o }")]
-    (not= (first (q old-model)) (first (q new-model)))))
-
-;; DISEASE_ID_CHANGE	The disease ontology ID has changed for this recuration
-
-(defn disease-change? [old-model new-model]
-  (let [q (rdf/create-query "select ?o where { ?a a :cg/GeneValidityProposition ; :cg/object ?o }")]
-    (not= (first (q old-model)) (first (q new-model)))))
-
-;; MOI_CHANGE	The Mode of Inheritance has changed from the previous curation
-
-(defn moi-change? [old-model new-model]
-  (let [q (rdf/create-query "
-select ?o where {
- ?a a :cg/GeneValidityProposition ;
- :cg/qualifier ?o }")]
-    (not= (first (q old-model)) (first (q new-model)))))
-
-;; EXPERT_PANEL_CHANGE	Ownership of the curation has transferred to a new Expert Panel or CDWG
-
-(defn expert-panel-change? [old-model new-model]
-  (let [q (rdf/create-query "
-select ?o where {
- ?a :cg/activityType :cg/Evaluated ;
- :cg/contributor ?o . }")]
-    (not= (first (q old-model)) (first (q new-model)))))
-
-;; SOP_CHANGE	A new SOP was used for the recuration
-
-(defn sop-change? [old-model new-model]
-  (let [q (rdf/create-query "
-select ?o where {
- ?a a :cg/Statement ;
- :cg/specifiedBy ?o . }")]
-    (not= (first (q old-model)) (first (q new-model)))))
-
-;; EVIDENCE_ADDED_CHANGE	A new evidence item was added
-
-(defn new-evidence? [old-model new-model]
-  (let [q (rdf/create-query "
-select ?o where {
- ?e :dc/source ?o . } ")]
-    (< (count (q old-model)) (count (q new-model)))))
-
-
-
-;; SUMMARY_TEXT_CHANGE	A minor text change was mane in the Summary section
-
-(defn summary-change? [old-model new-model]
-  (let [q (rdf/create-query "
-select ?o where { ?o a :cg/Statement . }")
-        summary (fn [m] (rdf/ld1-> (first (q m)) [:dc/description]))]
-    (not= (summary old-model) (summary new-model))))
-
-
-
-
-;; OTHER_TEXT_CHANGE	A minor text change was made in the evidence or other text sections
-
-(defn other-text-change? [old-model new-model]
-  (let [q (rdf/create-query "
-select ?o where { ?o :dc/description ?d 
-filter not exists { ?o a :cg/Statement } }")
-        text-elements (fn [m] (->> (q m)
-                                   (map (fn [r] [r (rdf/ld1-> r [:dc/description])]))
-                                   set))]
-    (not= (text-elements old-model) (text-elements new-model))))
-
-;; OTHER_CHANGE	A code to use where none other applies but the activity feels it is important to note the change.  This should be used sparingly.  If one or more activities has a frequent need, then a new formal change code should be added
-
-;; maybe not implemented
-
-(defn other-change? [old-model new-model]
-  false)
-
-(def change-codes
-  [{:phil-term "CLASSIFICATION_CHANGE"
-    :term :cg/classificationChange
-    :predicate classification-change?}
-   {:phil-term "MOI_CHANGE"
-    :term :cg/moiChange
-    :predicate moi-change?}
-   {:phil-term "EXPERT_PANEL_CHANGE"
-    :term :cg/expertPanelChange
-    :predicate expert-panel-change?}
-   {:phil-term "SOP_CHANGE"
-    :term :cg/sopChange
-    :predicate sop-change?}
-   {:phil-term "EVIDENCE_ADDED_CHANGE"
-    :term :cg/newEvidence
-    :predicate new-evidence?}
-   {:phil-term "SUMMARY_TEXT_CHANGE"
-    :term :cg/summaryChange
-    :predicate summary-change?}
-   {:phil-term "OTHER_TEXT_CHANGE"
-    :term :cg/otherTextChange
-    :predicate other-text-change?}])
-
-(defn changes [old-model new-model]
-  (reduce (fn [existing-changes change-code]
-            (if ((:predicate change-code) old-model new-model)
-              (conj existing-changes (:term change-code))
-              existing-changes))
-          []
-          change-codes))
-
-(defn gv-model [event]
-  (or (:gene-validity/model event)
-      (::event/data event)))
-
-(defn change-records [old-model new-model]
-  (->> (reduce (fn [records change-record-fn]
-                 (conj records (change-record-fn old-model new-model)))
-               []
-               (mapv :fn change-record-list-fns))
-       (remove nil?)
-       (into [])))
-
-(defn change-record->statements
-  [{:cg/keys [changeType previousVersion currentVersion]} assertion]
-  (let [s (rdf/blank-node)
-        stmts [[assertion :cg/changeRecords s]
-               [s :cg/changeType changeType]]]
-    (case (change-type->object-type changeType)
-      :string (conj stmts
-                    [s :cg/previousVersion previousVersion]
-                    [s :cg/currentVersion currentVersion])
-      :resource (conj stmts
-                      [s :cg/previousVersion (rdf/resource previousVersion)]
-                      [s :cg/currentVersion (rdf/resource currentVersion)])
-      :resource-list (into
-                      []
-                      (concat stmts
-                              (map (fn [x] [s :cg/previousVersion (rdf/resource x)])
-                                   previousVersion)
-                              (map (fn [x] [s :cg/currentVersion (rdf/resource x)])
-                                   currentVersion))))))
-
-(defn change-records->model [assertion change-records]
-  (try
-    (->> change-records
-         (mapcat #(change-record->statements % assertion))
-         (into [])
-         rdf/statements->model)
-    (catch Exception e
-      (tap> {:change-records change-records
-             :exception e})
-      (rdf/statements->model []))))
-
-
-(defn add-changes [event old-event]
-  (let [old-model (gv-model old-event)
-        new-model (gv-model event)
-        change-set (changes old-model new-model)
-        q (rdf/create-query "select ?o where { ?o a :cg/Statement . }")
-        assertion (-> event :gene-validity/model q first)
-        records (change-records old-model new-model)
-        records-model (change-records->model assertion records)
-        change-model (rdf/statements->model (mapv (fn [c] [assertion :cg/changes c])
-                                                  change-set))]
-    (assoc event
-           :gene-validity/changes change-set
-           :gene-validity/change-records records
-           :gene-validity/model (rdf/union new-model change-model records-model))))
-
-(def prop-query
-  (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }"))
-
-(defn proposition-id [model]
-  (let [prop (first (prop-query model))]
-    (id/iri
-     {:type :cg/GeneValidityProposition
-      :cg/subject (str (rdf/ld1-> prop [:cg/subject]))
-      :cg/object (str (rdf/ld1-> prop [:cg/object]))
-      :cg/qualifier (str (rdf/ld1-> prop [:cg/qualifier]))
-      :cg/predicate (str (rdf/ld1-> prop [:cg/predicate]))})))
-
-(def rename-proposition-query
-  (rdf/create-query "
-construct {
-  ?s ?p ?o .
-  ?propIRI ?p1 ?o1 .
-  ?s2 ?p2 ?propIRI .
-} where {
- { ?s ?p ?o .
-   FILTER NOT EXISTS { ?s a :cg/GeneValidityProposition . }
-   FILTER NOT EXISTS { ?o a :cg/GeneValidityProposition . } 
- }
- union 
- {
-  ?s1 a :cg/GeneValidityProposition .
-  ?s1 ?p1 ?o1 .
-  ?s2 ?p2 ?s1 .
- }
-}
-"))
-
-(defn rename-proposition [model]
-  (rename-proposition-query
-   model
-   {:propIRI (rdf/resource (proposition-id model))}))
-
-#_(-> genegraph.user/examples
-    first
-    :gene-validity/model
-    rename-proposition
-    rdf/pp-model)
 
 (def activity-with-role
   (rdf/create-query "select ?activity where
@@ -336,10 +28,6 @@ construct {
   (some-> (activity-with-role model {:role :cg/Submitted})
           first
           (rdf/ld1-> [:cg/date])))
-
-(defn no-change? [event prior-event]
-  (rdf/is-isomorphic? (:gene-validity/model event)
-                      (:gene-validity/model prior-event)))
 
 (defn event->approval-ms [event]
   (-> event
@@ -384,21 +72,8 @@ construct {
          :gene-validity/change-type
          (cond
            (recuration? event prior-event) :major-change
-           (no-change? event prior-event) :no-change
+           (changes/no-change? event prior-event) :no-change
            :default :minor-change)))
-
-(defn store-this-version [event]
-  (let [event-elements-to-store
-        (select-keys event
-                     [:gene-validity/version
-                      :gene-validity/model
-                      :gene-validity/approval-date
-                      :gene-validity/change-records
-                      :gene-validity/website-event])]
-    (event/store event
-                 :gene-validity-version-store
-                 [::last-version (::proposition-iri event)]
-                 event-elements-to-store)))
 
 (defn add-version-increment-given-change [event prior-event]
   (let [prior-version (:gene-validity/version prior-event)]
@@ -414,18 +89,10 @@ construct {
       (add-change-type prior-version)
       (add-version-increment-given-change prior-version)))
 
-(defn read-prior-version [event gdm-iri]
-  (let [prior-version
-        (storage/read (get-in event [::storage/storage :gene-validity-version-store])
-                      [::prior-version gdm-iri])]
-    (if (= ::storage/miss prior-version)
-      nil
-      prior-version)))
-
 (defn add-version-map [event]
-  (if-let [prior-version (read-prior-version event (::proposition-iri event))]
+  (if-let [prior-version (:gene-validity/previous-model event)]
     (-> event
-        (add-changes prior-version)
+        (changes/add-changes prior-version)
         (calculate-version-given-prior-version prior-version))
     (assoc event
            :gene-validity/version {:major 1 :minor 0}
@@ -461,24 +128,27 @@ construct {
 }
 "))
 
+(defn version-map->version-str [version-map]
+  (str (:major version-map "0")
+       "."
+       (:minor version-map "0")
+       "."
+       (:patch version-map "0")))
 
 (defn add-versioned-model [event]
   (let [model (:gene-validity/model event)
-        version-str (str (get-in event [:gene-validity/version :major])
-                         "."
-                         (get-in event [:gene-validity/version :minor]))
-        assertion-root (first (prop-query model))
+        version-str (version-map->version-str (:gene-validity/version event))
+        assertion-root #_(first (proposition/prop-query model)) (:gene-validity/gdm event)
         assertion-with-version (rdf/resource
                                 (str assertion-root
                                      "v"
                                      version-str))
-        sequence (::event/offset event -1)
-        model-with-renamed-proposition (rename-proposition model)]
+        sequence (::event/offset event -1)]
     (assoc event
            :gene-validity/model
-           (construct-versioned-model model-with-renamed-proposition
+           (construct-versioned-model model
                                       {:assertionIRI assertion-with-version
-                                       :assertionRoot assertion-root
+                                       :assertionRoot (rdf/resource assertion-root)
                                        :snapshotIRI (first (assertion-iri model))
                                        :version version-str
                                        :sequence sequence}))))
@@ -489,23 +159,112 @@ construct {
          ::proposition-iri
          (-> event
              :gene-validity/model
-             prop-query
+             proposition/prop-query
              first
              str)))
 
-(defn calculate-version [event]
+#_(defn calculate-version [event]
   (let [event-with-approval-date (add-approval-date event)]
     (if (and (has-publish-action (:gene-validity/model event))
              (:gene-validity/approval-date event-with-approval-date))
       (-> event-with-approval-date
           add-prop-iri
           add-version-map
-          store-this-version
           add-versioned-model)
       event-with-approval-date)))
 
 #_(defn update-unpublish-event [event]
   (let [prior-version (read-prior-version )]))
+
+(defn first-curation? [event]
+  (nil? (:gene-validity/last-outcome event)))
+
+(defn patch-release? [event]
+  (:gene-validity/patch-release event))
+
+(defn gci-recuration? [event]
+  (seq (set/intersection recuration-reasons (:gene-validity/curation-reasons event))))
+
+(defn gci-minor-change?
+  "Requires gci-recuration? first. If the GCI lists change reasons, and none of them are
+  in the recuration-reasons set, the change is by default a minor change."
+  [event]
+  (seq (:gene-validity/curation-reasons event)))
+
+(defn no-op?
+  "Determine if there has been no significant change within a patch release. If this is the case,
+  do not increment version."
+  [event]
+  false)
+
+(defn event->approval-ms [event]
+  (-> event
+      :gene-validity/approval-date
+      Instant/parse
+      .toEpochMilli))
+
+(defn calculated-curation-approval-time-change? [event]
+  (< six-months
+     (- (event->approval-ms event)
+        (event->approval-ms (:gene-validity/last-outcome event)))))
+
+(defn add-change-type [event]
+  (assoc
+   event
+   :gene-validity/change-type
+   (cond
+     (first-curation? event):first-curation
+     (no-op? event) :no-op
+     (patch-release? event) :patch
+     (gci-recuration? event) :gci-recuration
+     (gci-minor-change? event) :gci-minor-change
+     (calculated-curation-approval-time-change? event) :time-delta-recuration
+     :else :default-minor-change)))
+
+(defn inc-version [version change-level]
+  (update version change-level inc))
+
+(defn inc-major [{:keys [major]}]
+  {:major (inc major)
+   :minor 0
+   :patch 0})
+
+(defn inc-minor [{:keys [major minor]}]
+  {:major major
+   :minor (inc minor)
+   :patch 0})
+
+(defn inc-patch [v]
+  (update v :patch inc))
+
+(defn add-version-fn [event]
+  (let [prior-version (get-in event [:gene-validity/last-outcome :gene-validity/version])]
+    (assoc
+     event
+     :gene-validity/version
+     (case (:gene-validity/change-type event)
+       :first-curation {:major 1 :minor 0 :patch 0}
+       :patch (inc-patch prior-version)
+       :gci-recuration (inc-major prior-version)
+       :time-delta-recuration (inc-major prior-version)
+       :no-op (:gene-validity/version event)
+       :gci-minor-change (inc-minor prior-version)
+       :default-minor-change (inc-minor prior-version)
+       (log/info :fn ::version :change-type (:gene-validity/change-type event))))))
+
+(defn calculate-version [event]
+  (try
+    (if (get (:gene-validity/activity event) :cg/Submitted)
+      (-> event
+          add-change-type
+          add-version-fn
+          add-versioned-model)
+      event)
+    (catch Exception e
+      (tap> (abbrev/abbreviate event))
+      (log/warn :fn ::calculate-version
+                :offset (::event/offset event))
+      event)))
 
 (def add-version
   (interceptor/interceptor

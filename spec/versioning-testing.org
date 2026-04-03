@@ -1,0 +1,329 @@
+* Versioning Testing Strategy
+
+Testing strategy for =versioning.clj=. The module is responsible for:
+comparing new vs. prior SEPIO models, computing a semantic version, detecting
+what changed, and constructing the versioned RDF model. Tests are REPL-based,
+running against real transformed events from the event store.
+
+** Key Behaviors to Validate
+
+| Behavior                        | Function(s)                                        |
+|---------------------------------+----------------------------------------------------|
+| First curation → v1.0           | =add-version-map=                                  |
+| No change → same version        | =no-change?=, =add-change-type=                    |
+| Minor change → minor increment  | =add-change-type=, =add-version-increment-given-change= |
+| Recuration → major increment    | =recuration?=, =add-change-type=                   |
+| GCI reasons drive recuration    | =recuration-from-gci-reasons?=                     |
+| 6-month heuristic fallback      | =estimated-recuration?=                            |
+| Change codes detected correctly | =changes=                                          |
+| Change records produced         | =change-records=, =change-record->statements=      |
+| Proposition IRI normalised      | =rename-proposition=, =proposition-id=             |
+| Versioned assertion IRI correct | =add-versioned-model=                              |
+| Version/sequence/snapshot triples | =construct-versioned-model=                      |
+| Prior version read from storage | =read-prior-version=                               |
+| Version written to storage      | =store-this-version=                               |
+| Unpublish events skip versioning | =calculate-version= (has-publish-action guard)    |
+
+** Known Bug: Storage Key Mismatch
+
+=store-this-version= writes under =[::last-version <proposition-iri>]= (line 393)
+but =read-prior-version= reads under =[::prior-version <proposition-iri>]= (line
+412). These keys will never match. Any test that exercises the full
+write-then-read round-trip will expose this; the prior-version will always be a
+miss and every event will be treated as a new curation (v1.0).
+
+Verify with:
+
+#+begin_src clojure
+;; Run two events for the same GDM sequentially through the full pipeline.
+;; The second event should produce v1.1 (or v2.0 if recuration) but will
+;; produce v1.0 if the bug is present.
+(let [[e1 e2] (events-for-gdm "815e0f84-b530-4fd2-81a9-02e02bf352ee")]
+  {:v1 (get-in (transform-curation e1) [:gene-validity/version])
+   :v2 (get-in (transform-curation e2) [:gene-validity/version])})
+;; Expected: {:v1 {:major 1 :minor 0}, :v2 {:major 1 :minor 1}} (or similar)
+;; Buggy:    {:v1 {:major 1 :minor 0}, :v2 {:major 1 :minor 0}}
+#+end_src
+
+** Test Data Patterns
+
+Versioning tests require event pairs or sequences for the same GDM. Useful
+patterns for finding them:
+
+#+begin_src clojure
+(require '[genegraph.framework.event.store :as event-store]
+         '[genegraph.framework.event :as event]
+         '[genegraph.framework.storage.rdf :as rdf])
+
+(def source-file
+  "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-07-29.edn.gz")
+
+;; Find GDM UUIDs that appear multiple times (= have been recurated)
+(defn multi-version-gdms [source-file n]
+  (event-store/with-event-reader [r source-file]
+    (->> (event-store/event-seq r)
+         (map #(re-find #"[0-9a-f-]{36}" (::event/value %)))
+         (remove nil?)
+         frequencies
+         (filter #(>= (val %) n))
+         (sort-by val >)
+         (take 20))))
+
+;; Load all events for a specific GDM UUID in sequence order
+(defn events-for-gdm [source-file uuid]
+  (event-store/with-event-reader [r source-file]
+    (->> (event-store/event-seq r)
+         (filter #(str/includes? (::event/value %) uuid))
+         (into []))))
+
+;; Transform all events for a GDM and extract version/change info
+(defn version-history [source-file uuid]
+  (->> (events-for-gdm source-file uuid)
+       (map transform-curation)
+       (mapv (fn [e]
+               {:offset   (::event/offset e)
+                :version  (:gene-validity/version e)
+                :change-type (:gene-validity/change-type e)
+                :changes  (:gene-validity/changes e)}))))
+#+end_src
+
+** Unit-Level Checks
+
+These can be run against individual transformed events without needing a prior
+version in storage. They validate the shape of the output model.
+
+*** Version triples present
+
+#+begin_src clojure
+(def has-version-triple
+  "The versioned model must have a :cg/version triple on the Statement."
+  {:label :has-version-triple
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?v where { ?a a :cg/Statement ; :cg/version ?v }") m)))})
+
+(def has-sequence-triple
+  "The versioned model must have a :cg/sequence triple (Kafka offset)."
+  {:label :has-sequence-triple
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?s where { ?a a :cg/Statement ; :cg/sequence ?s }") m)))})
+
+(def has-snapshot-triple
+  "The versioned model must have a :cg/GCISnapshot triple linking to the raw snapshot IRI."
+  {:label :has-snapshot-triple
+   :check-fn (fn [m]
+               (seq ((rdf/create-query
+                      "select ?s where { ?a a :cg/Statement ; :cg/GCISnapshot ?s }") m)))})
+
+(def version-iri-matches-version-triple
+  "The assertion IRI must end with the version string from the :cg/version triple."
+  {:label :version-iri-matches-version
+   :check-fn (fn [m]
+               (let [q (rdf/create-query "select ?a ?v where { ?a a :cg/Statement ; :cg/version ?v }")
+                     result (first (q m))]
+                 (when result
+                   (let [assertion-iri (str (first result))
+                         version-str (str (second result))]
+                     (str/ends-with? assertion-iri (str "v" version-str))))))})
+
+(def proposition-iri-stable
+  "The cg:GeneValidityProposition IRI must be a deterministic hash-based IRI,
+  not the raw GCI UUID. Stable means it contains no raw GCI UUID segment."
+  {:label :proposition-iri-stable
+   :check-fn (fn [m]
+               (let [q (rdf/create-query "select ?p where { ?p a :cg/GeneValidityProposition }")
+                     prop (first (q m))]
+                 ;; A raw GCI UUID looks like 8-4-4-4-12 hex digits
+                 (when prop
+                   (not (re-find #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                                 (str prop))))))})
+
+(def version-string-format
+  "The :cg/version value must match N.N format."
+  {:label :version-string-format
+   :check-fn (fn [m]
+               (let [q (rdf/create-query "select ?v where { ?a a :cg/Statement ; :cg/version ?v }")
+                     v (some-> (first (q m)) str)]
+                 (when v (re-matches #"\d+\.\d+" v))))})
+
+(def versioning-checks
+  [has-version-triple
+   has-sequence-triple
+   has-snapshot-triple
+   version-iri-matches-version-triple
+   proposition-iri-stable
+   version-string-format])
+#+end_src
+
+*** Change records structural checks
+
+#+begin_src clojure
+(def change-record-types
+  "Every :cg/changeRecords node must have a :cg/changeType."
+  {:label :change-record-types
+   :check-fn (fn [m]
+               (let [records-q (rdf/create-query
+                                "select ?r where { ?a :cg/changeRecords ?r }")
+                     type-q    (rdf/create-query
+                                "select ?t where { ?r :cg/changeType ?t }")]
+                 (every? #(seq (type-q m {:r %})) (records-q m))))})
+
+(def change-record-versions-present
+  "Every :cg/changeRecords node must have both :cg/previousVersion and :cg/currentVersion."
+  {:label :change-record-versions-present
+   :check-fn (fn [m]
+               (let [records-q (rdf/create-query
+                                "select ?r where { ?a :cg/changeRecords ?r }")
+                     prev-q    (rdf/create-query
+                                "select ?v where { ?r :cg/previousVersion ?v }")
+                     curr-q    (rdf/create-query
+                                "select ?v where { ?r :cg/currentVersion ?v }")]
+                 (every? (fn [record]
+                           (and (seq (prev-q m {:r record}))
+                                (seq (curr-q m {:r record}))))
+                         (records-q m))))})
+#+end_src
+
+** Sequence-Level Checks (require ordered events for same GDM)
+
+These validate behavior across multiple versions of the same GDM.
+
+#+begin_src clojure
+(defn version-sequence-valid?
+  "Given a seq of transformed events for one GDM in order, check that:
+   - First event is v1.0
+   - Version never decreases
+   - Major increments reset minor to 0
+   - No-change events have the same version as prior"
+  [events]
+  (let [versions (mapv :gene-validity/version events)
+        change-types (mapv :gene-validity/change-type events)]
+    (and
+     ;; first version must be 1.0 or :new-curation
+     (or (= {:major 1 :minor 0} (first versions))
+         (= :new-curation (first change-types)))
+     ;; monotonically non-decreasing major
+     (every? true?
+             (map (fn [a b] (<= (:major a) (:major b)))
+                  versions (rest versions)))
+     ;; no-change events preserve version
+     (every? true?
+             (map (fn [ct prior curr]
+                    (if (= ct :no-change)
+                      (= prior curr)
+                      true))
+                  (rest change-types)
+                  versions
+                  (rest versions)))
+     ;; major increment resets minor to 0
+     (every? true?
+             (map (fn [ct curr]
+                    (if (= ct :major-change)
+                      (= 0 (:minor curr))
+                      true))
+                  (rest change-types)
+                  (rest versions))))))
+
+(defn run-sequence-checks [source-file gdm-uuid]
+  (let [events (->> (events-for-gdm source-file gdm-uuid)
+                    (map transform-curation)
+                    (filter #(= :published (get-in % [:gene-validity/gci-model
+                                                      :approvalStatus]))))]
+    {:uuid        gdm-uuid
+     :count       (count events)
+     :versions    (mapv :gene-validity/version events)
+     :change-types (mapv :gene-validity/change-type events)
+     :sequence-valid? (version-sequence-valid? events)}))
+#+end_src
+
+** Change Code Correctness
+
+For each change code, find a pair of adjacent events where the change is known
+to exist or not exist, and verify the predicate fires correctly.
+
+#+begin_src clojure
+;; Find an event pair where classification changed
+(defn find-classification-change [source-file]
+  (let [cls-q (rdf/create-query "select ?c where { ?a :cg/classification ?c }")]
+    (event-store/with-event-reader [r source-file]
+      (->> (event-store/event-seq r)
+           (map transform-curation)
+           (partition 2 1)  ; sliding pairs
+           (filter (fn [[e1 e2]]
+                     (not= (first (cls-q (:gene-validity/model e1)))
+                           (first (cls-q (:gene-validity/model e2))))))
+           first))))
+
+;; Check that :cg/classificationChange fires for that pair
+(comment
+  (let [[e1 e2] (find-classification-change source-file)]
+    {:expected-in-changes? true
+     :actual-changes (versioning/changes (:gene-validity/model e1)
+                                         (:gene-validity/model e2))}))
+#+end_src
+
+** Recuration Detection Edge Cases
+
+#+begin_src clojure
+;; Case 1: GCI reasons present and include a recuration reason → :recuration
+;; Case 2: GCI reasons present but none are recuration reasons → :no-recuration
+;; Case 3: No GCI reasons at all, < 6 months apart → minor change
+;; Case 4: No GCI reasons at all, > 6 months apart → major change (heuristic)
+
+;; Find a curation with explicit recuration reasons
+(def recuration-q
+  (rdf/create-query "select ?r where { ?c :cg/curationReasons ?r }"))
+
+(event-store/with-event-reader [r source-file]
+  (->> (event-store/event-seq r)
+       (take-last 500)
+       (map transform-curation)
+       (filter #(seq (recuration-q (:gene-validity/model %))))
+       (map #(hash-map :iri   (::event/iri %)
+                       :reasons (map rdf/->kw (recuration-q (:gene-validity/model %)))))
+       (take 5)))
+
+;; Verify recuration-from-gci-reasons? returns expected keyword
+(comment
+  (let [e (first (filter #(seq (recuration-q (:gene-validity/model %)))
+                         (take-last 500 (event-store/event-seq r))))]
+    (versioning/recuration-from-gci-reasons? (transform-curation e))))
+;; Expected: :recuration
+#+end_src
+
+** Full Corpus Validation
+
+Run before release. Verifies version triples and structural correctness across
+all published events. Note: because of the storage key bug, prior version will
+always be a miss, so all events will be treated as new curations (v1.0) unless
+the bug is fixed first.
+
+#+begin_src clojure
+(defn validate-versioning-corpus
+  "Run versioning checks over the full event store.
+  Returns summary of pass/fail counts per check."
+  [source-file]
+  (event-store/with-event-reader [r source-file]
+    (->> (event-store/event-seq r)
+         (map transform-curation)
+         (filter :gene-validity/model)   ; skip unpublish/error events
+         (run-and-summarize versioning-checks))))
+
+(comment
+  (time (tap> (validate-versioning-corpus source-file))))
+#+end_src
+
+** Suggested Fix Order and Corresponding Checks
+
+| Issue                                    | Check                                         |
+|------------------------------------------+-----------------------------------------------|
+| Storage key mismatch (::last-version vs ::prior-version) | =:version-sequence-valid?= (sequence) |
+| Versioned IRI doesn't match version triple | =:version-iri-matches-version=            |
+| Proposition IRI contains raw GCI UUID   | =:proposition-iri-stable=                     |
+| Missing :cg/version triple              | =:has-version-triple=                          |
+| Missing :cg/sequence triple             | =:has-sequence-triple=                         |
+| Change records missing type/versions    | =:change-record-types=, =:change-record-versions-present= |
+
+Fix the storage key mismatch first — it is a prerequisite for all
+sequence-level version checks to produce meaningful results.

@@ -6,10 +6,12 @@
             [genegraph.transform.gene-validity.event-recorder :as recorder]
             [genegraph.transform.gene-validity.gci-model :as gci-model]
             [genegraph.transform.gene-validity.sepio-model :as sepio-model]
+            [genegraph.transform.gene-validity.proposition :as proposition]
             [genegraph.transform.gene-validity.versioning :as versioning]
             [genegraph.transform.gene-validity.website-events :as website-event]
             [genegraph.transform.gene-validity.validation :as validation]
             [genegraph.transform.gene-validity.abbreviate :as abbrev]
+            [genegraph.transform.gene-validity.changes :as changes]
             [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.storage.rdf.jsonld :as jsonld]
             [genegraph.framework.storage :as storage]
@@ -197,26 +199,6 @@
     :enter (fn [e] (add-timestamp-fn e n :enter))
     :leave (fn [e] (add-timestamp-fn e n :leave))}))
 
-#_(def transform-processor
-  {:type :processor
-   :name :gene-validity-transform
-   :subscribe :gene-validity-complete
-   :backing-store :gene-validity-version-store
-   :interceptors [(add-timestamp :begin)
-                  report-transform-errors
-                  gci-model/add-gci-model
-                  (add-timestamp :gci-model)
-                  sepio-model/add-model
-                  (add-timestamp :sepio-model)
-                  versioning/add-version
-                  (add-timestamp :version)
-                  add-jsonld
-                  (add-timestamp :write-jsonld)
-                  add-iri
-                  website-event/website-version-interceptor
-                  (add-timestamp :website-version)
-                  add-publish-actions]})
-
 
 (defn tap-interceptor-fn [e]
   (when (:pp-model e) (rdf/pp-model (:gene-validity/model e)))
@@ -224,7 +206,8 @@
         (:tap-without-models e) (tap> (dissoc e
                                               :gene-validity/gci-model
                                               :gene-validity/model
-                                              :gene-validity/unmodified-model))
+                                              :gene-validity/unmodified-model
+                                              :gene-validity/previous-model))
         (:tap-all e) (tap> e)) 
   e)
 
@@ -254,12 +237,14 @@
                   abbrev/add-gci-model-attributes
                   sepio-model/add-model
                   recorder/add-previous-version
-                  versioning/add-version
-                  add-jsonld
+                  proposition/rename-proposition-interceptor
                   add-iri
                   abbrev/add-model-attributes
-                  website-event/website-version-interceptor
+                  changes/add-changes
+                  versioning/add-version
+                  #_website-event/website-version-interceptor
                   validation/validate
+                  add-jsonld
                   add-publish-actions]})
 
 (defn gci-event-fn [event]

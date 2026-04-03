@@ -45,7 +45,7 @@
                    construct-unscoreable-evidence
                    unlink-variant-scores-when-proband-scores-exist
                    unlink-segregations-when-no-proband-and-lod-scores
-                   add-legacy-website-id
+                   #_add-legacy-website-id
                    unpublish-evidence-level-assertion
                    prune-empty-evidence-lines
                    prune-empty-evidence-ids
@@ -110,7 +110,8 @@
    "select ?assertion where
  { ?assertion a :cg/EvidenceStrengthAssertion }"))
 
-(defn legacy-website-id
+;; TODO evaluate removal of this
+#_(defn legacy-website-id
   "The website uses a version of the assertion ID that incorporates
   the approval date. Annotate the curation with this ID to retain
   backward compatibility with the legacy schema."
@@ -184,8 +185,7 @@ select ?gdm where
       [gdm-id :dc/isVersionOf gdm-id]
       [unpublish-contribution-iri :cg/activityType :cg/Unpublished]
       [unpublish-contribution-iri :cg/date (:publishTime params)]
-      [unpublish-contribution-iri :cg/contributor affiliation]
-      [unpublish-contribution-iri :cg/gdm gdm-id]])))
+      [unpublish-contribution-iri :cg/contributor affiliation]])))
 
 (def proband-score-cap-query
   (rdf/create-query "select ?x where 
@@ -222,7 +222,7 @@ select ?gdm where
                                  (rdf/union
                                   unlinked-model
                                   gdm-sepio-relationships))
-                                (add-legacy-website-id
+                                #_(add-legacy-website-id
                                  unlinked-model
                                  {:legacy_id (legacy-website-id unlinked-model)}))]
     (-> linked-model
@@ -253,9 +253,7 @@ select ?gdm where
 (defn add-model-fn [event]
   (let [m (gci-data->sepio-model (:gene-validity/gci-model event)
                                  (params-for-construct event))]
-    (assoc event
-           :gene-validity/model m
-           :gene-validity/unmodified-model (rdf/union m))))
+    (assoc event :gene-validity/model m)))
 
 (def add-model
   (interceptor/interceptor

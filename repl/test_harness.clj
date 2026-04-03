@@ -29,6 +29,11 @@
             [clojure.walk :as walk]
             [clojure.spec.alpha :as spec]))
 
+(defn gdm-id [e]
+  (or (get-in e [::event/data :resourceParent :gdm :PK])
+      (get-in e [::event/data :resourceParent :gdm :uuid])
+      (get-in e [::event/data :properties :resourceParent :gdm :uuid])))
+
 
 (comment
   (do
@@ -50,7 +55,7 @@
   (p/stop test-app)
 
   (def source-file
-    "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-03-18.edn.gz")
+    "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-04-02.edn.gz")
   
   (tap> test-app))
 
@@ -128,8 +133,10 @@
    :storage {:gene-validity-version-store
              (assoc gv/gene-validity-version-store :reset-opts {})
              :curation-output curation-output}
-   :processors {:gene-validity-transform (assoc gv/transform-processor
-                                                :type :parallel-processor)
+   :processors {:gene-validity-transform #_gv/transform-processor
+                (assoc gv/transform-processor
+                       :type :parallel-processor
+                       :gate-fn gdm-id)
                 :gci-event-processor gv/gci-event-processor
                 :gene-validity-sepio-output
                 (create-record-output-processor :gene-validity-sepio)
@@ -202,23 +209,142 @@
 ;; Discovered the problem is with the way versioning renames things. Will
 ;; take the unmodified (sepio) model and handle it differently.
 
+  ;; uuids with lots of publish events
+  ;; consider portions of this for a versioning
+  ;; test set
+
+#{"21433cc1-d3ae-4b62-b189-5611a2ad6f20"
+  "7ab659f2-1f7f-40a0-a4b8-6b9dfa3c3ecb"
+  "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
+  "90d2d66b-dc32-4737-a2b3-25fcb6ae3474"
+  "b865e2b3-a7ef-4cb9-a342-bb2192df8183"
+  "b7ee4cbb-3011-4d6a-b8c5-97d4a2b028c4"
+  "c16423b1-2353-475c-a43e-987a46fa1f00"
+  "658b0515-e59d-4223-9ba6-cc2afcfb480f"
+  "5d4784ce-8f46-4e52-8a76-56fc2b22741b"
+  "bdeac672-75cd-4577-b330-7b0d7fa6e147"}
+
+(def test-set
+  #{"21433cc1-d3ae-4b62-b189-5611a2ad6f20"
+    "7ab659f2-1f7f-40a0-a4b8-6b9dfa3c3ecb"
+    "1bb8bc84-fe02-4a05-92a0-c0aacf897b6e"
+    "90d2d66b-dc32-4737-a2b3-25fcb6ae3474"
+    "b865e2b3-a7ef-4cb9-a342-bb2192df8183"
+    "b7ee4cbb-3011-4d6a-b8c5-97d4a2b028c4"
+    "c16423b1-2353-475c-a43e-987a46fa1f00"
+    "658b0515-e59d-4223-9ba6-cc2afcfb480f"
+    "5d4784ce-8f46-4e52-8a76-56fc2b22741b"
+    "bdeac672-75cd-4577-b330-7b0d7fa6e147"})
+
+(defn gdm-id->iri [gdm]
+  (str "https://genegraph.clinicalgenome.org/r/" gdm))
+
+(defn gdm-id->outcomes [id app]
+  (let [store @(get-in app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan store [:outcomes (gdm-id->iri id)]))))
+
+(defn gdm-id->events [id app]
+  (let [store @(get-in app [:storage :gene-validity-version-store :instance])]
+    (->> (gdm-id->outcomes id app)
+         (map ::event/offset)
+         set
+         sort
+         (map #(storage/read store [:events :gene-validity-complete %])))))
+
+;; adding the take statement
+;; seems to prevent a race condition
 (comment
+  (->> (gdm-id->events (second test-set) test-app)
+       (take 1)
+       (map #(assoc % :tap-abbrev true :pp-model true))
+       (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
+
+  (->> (gdm-id->outcomes (second test-set) test-app)
+       tap>)
+  
+  (->> (storage/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
+                     [:outcomes (gdm-id->iri (first test-set))])
+       tap>)
+
+  (->> (storage/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
+                     [:outcomes])
+       (filter #(seq (:gene-validity/curation-reasons %)))
+       (take 5)
+       tap>)
+
+  (->> (storage/scan @(get-in test-app [:storage :gene-validity-version-store :instance])
+                     [:outcomes])
+       (map #(:gene-validity/curation-reasons %))
+       (reduce set/union)
+       tap>)
+  
+
+  
   (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
                           {:prefix [:events :gene-validity-complete]
                            :return :ref})
-       (take 1)
+       #_(take 1)
+       
        (map deref)
-       (map #(assoc %
-                    :tap-without-models true
-                    #_#_:pp-model true))
+       #_(filter #(test-set (gdm-id %)))
+       #_(map #(assoc %
+                      :tap-without-models true
+                      #_#_:pp-model true))
        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
+
+  (p/publish (get-in test-app [:topics :transform-topic])
+             (assoc (storage/read @(get-in test-app [:storage
+                                                     :gene-validity-version-store
+                                                     :instance])
+                                  [:events :gene-validity-complete 4993])
+                    :tap-without-models true))
+
+  (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
+                          {:prefix [:events :gene-validity-complete]
+                           :return :ref})
+       (take 5)
+       (map deref)
+       #_(map #(get-in % [::event/data :symbol]))
+       #_frequencies
+       #_(sort-by val)
+       #_reverse
+       #_(take 10)
+       tap>)
+
+
+
+
+
+
+  (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
+                          {:prefix [:events :gene-validity-complete]
+                           :return :ref})
+       #_(take 5)
+       (map deref)
+       (map gdm-id)
+       frequencies
+       (sort-by val)
+       reverse
+       (take 10)
+       tap>)
+
+  (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
+                          {:prefix [:events :gene-validity-complete]
+                           :return :ref})
+       #_(take 5)
+       (map deref)
+       (remove #(or (get-in % [::event/data :resourceParent :gdm :PK])
+                    (get-in % [::event/data :resourceParent :gdm :uuid])))
+       (take 5)
+       tap>)
   
   (time (gv/reprocess-events test-app))
 
   (->> (storage/scan @(get-in test-app
                               [:storage :gene-validity-version-store :instance])
                      [:outcomes])
-       count)
+       (take 1)
+       tap>)
 
   ;; check for type of failed tests
   (->> (storage/scan @(get-in test-app
@@ -229,4 +355,23 @@
        (reduce concat)
        set)
 
+ (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan store [:outcomes])
+         (filter #(get (:gene-validity/activity %) :cg/Submitted))
+         (group-by :gene-validity/gdm)
+         (filter #(> (count (val %)) 1))                                                               
+         (map (fn [[gdm outcomes]]
+                (let [sorted (sort-by ::event/offset outcomes)                                         
+                      broken (filter (fn [[prev curr]]
+                                       (not= (::event/offset prev)                                     
+                                             (::event/offset (:gene-validity/last-outcome curr))))
+                                     (partition 2 1 sorted))]                                          
+                  {:gdm gdm :broken-links (count broken) :total (count sorted)})))                     
+         (filter #(pos? (:broken-links %)))                                                            
+         count))
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan store [:outcomes "https://genegraph.clinicalgenome.org/r/a2d7ac24-7e2d-4a5a-90db-10dd997566bb"])                                    tap>))
+
+  "https://genegraph.clinicalgenome.org/r/a2d7ac24-7e2d-4a5a-90db-10dd997566bb"
   )

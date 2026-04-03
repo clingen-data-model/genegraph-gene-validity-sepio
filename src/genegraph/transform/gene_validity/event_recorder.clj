@@ -128,26 +128,26 @@
               (get-in event [::storage/storage
                              :gene-validity-version-store])
               [:transforms
-               :gene-validity/unmodified-model
+               :gene-validity/model
                (::event/offset event)
                (dec (get-in event [:versions
-                                   :gene-validity/unmodified-model]))])]
+                                   :gene-validity/model]))])]
     (if (= ::storage/miss m)
       nil
       m)))
 
-(defn model-from-previous-data-version [event]
-  (let [m (storage/read
+(defn outcome-from-previous-data-version [event]
+  (let [o (storage/read
            (get-in event [::storage/storage
-                             :gene-validity-version-store])
-              [:transforms
-               :gene-validity/unmodified-model
-               (::event/offset event)
-               (dec (get-in event [:versions
-                                   :gene-validity/unmodified-model]))])]
-    (if (= ::storage/miss m)
+                          :gene-validity-version-store])
+           [:outcomes
+            (:gene-validity/gdm event)
+            (::event/offset event)
+            (dec (get-in event [:versions
+                                :gene-validity/model]))])]
+    (if (= ::storage/miss o)
       nil
-      m)))
+      o)))
 
 (defn add-model-from-previous-publish-event [event]
   (let [store (get-in event [::storage/storage
@@ -156,12 +156,13 @@
     (if-let [last-outcome (->> (storage/scan
                                 store
                                 [:outcomes (:gene-validity/gdm event)])
-                               (filter #(< (::event/offset %) (::event/offset event)))
+                               (filter #(and (< (::event/offset %) (::event/offset event))
+                                             (get (:gene-validity/activity %) :cg/Submitted)))
                                last)]
       (let [m (storage/read store [:transforms
-                                   :gene-validity/unmodified-model
+                                   :gene-validity/model
                                    (::event/offset last-outcome)
-                                   (get-in event [:versions :gene-validity/unmodified-model])])]
+                                   (get-in event [:versions :gene-validity/model])])]
         (assoc event
                :gene-validity/previous-model m
                :gene-validity/last-outcome last-outcome))
@@ -171,7 +172,8 @@
   (if-let [m1 (model-from-previous-data-version event)]
     (assoc event
            :gene-validity/previous-model m1
-           :gene-validity/patch-release true)
+           :gene-validity/patch-release true
+           :gene-validity/last-outcome (outcome-from-previous-data-version event))
     (add-model-from-previous-publish-event event)))
 
 (def add-previous-version

@@ -36,9 +36,20 @@
       :cg/Submitted
       :cg/Unpublished)))
 
-(defn gdm [event]
+(defn gdm-id [e]
+  (or (get-in e [::event/data :resourceParent :gdm :PK])
+      (get-in e [::event/data :resourceParent :gdm :uuid])
+      (get-in e [::event/data :properties :resourceParent :gdm :uuid])))
+
+(defn gdm-id->iri [gdm]
+  (str "https://genegraph.clinicalgenome.org/r/" gdm))
+
+#_(defn gdm [event]
   (let [q (rdf/create-query "select ?gdm where { ?gdm a :gg/gdm }")]
     (-> event :gene-validity/gci-model q first str)))
+
+(defn gdm [event]
+  (-> event gdm-id gdm-id->iri))
 
 (defn add-gci-model-attributes-fn [event]
   (assoc event
@@ -68,13 +79,42 @@
   values ?activityType {
   :cg/Submitted
   :cg/Unpublished
-  }}"]])
+  }}"]
+   [:gene-validity/classification
+    "
+select ?class where {
+?s a :cg/Statement ;
+ :cg/proposition ?prop ;
+ :cg/classification ?class .
+  ?prop a :cg/GeneValidityProposition . }"]])
 
-(defn add-model-attributes-fn [event]
-  (reduce (fn [e [k q]]
-            (add-query-result e k q))
-          event
-          model-attribute-queries))
+(defn approval-date [model]
+  (let [q (rdf/create-query "select ?activity where
+{ ?activity :cg/activityType ?role }")]
+       (some-> (q model {:role :cg/Evaluated})
+               first
+               (rdf/ld1-> [:cg/date]))))
+
+(defn curation-reasons [model]
+  (let [q (rdf/create-query "select ?reasons where
+{ ?curation :cg/curationReasons ?reasons }")]
+    (->> (q model) (map rdf/->kw) set)))
+
+(defn add-model-attributes-fn [{:gene-validity/keys [model] :as event}]
+  (let [activities (rdf/create-query "
+select ?role where {
+?s a :cg/Statement ;
+ :cg/contributions ?contrib .
+?contrib :cg/activityType ?role } ")]
+    (assoc (reduce (fn [e [k q]]
+                     (add-query-result e k q))
+                   event
+                   model-attribute-queries)
+           :gene-validity/curation-reasons (curation-reasons model)
+           :gene-validity/approval-date (approval-date model)
+           :gene-validity/activity (->> (activities model)
+                                        (map rdf/->kw)
+                                        set))))
 
 (def add-model-attributes
   (interceptor/interceptor
@@ -86,7 +126,12 @@
    ::event/key
    ::event/kafka-topic
    ::event/value-hash
+   :gene-validity/last-outcome
+   :gene-validity/curation-reasons
+   :gene-validity/activity
+   :gene-validity/activity-type
    :gene-validity/change-type
+   :gene-validity/change-records
    :gene-validity/approval-date
    :gene-validity/version
    #_:genegraph.transform.gene-validity.versioning/proposition-iri
@@ -99,6 +144,7 @@
    :gene-validity/gene
    :gene-validity/disease
    :gene-validity/gcep
+   :gene-validity/classification
    #_:genegraph.transform.gene-validity.event-recorder/retrieved-from-store])
 
 (defn abbreviate [event]

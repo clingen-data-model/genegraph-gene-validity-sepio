@@ -213,7 +213,15 @@ Reading Gene Validity Complete (could even switch back to raw and pre-load exist
 
 
 
-
+* Event Versioning
+** Patch release
+Event has been previously published.
+Need to check if any current code changes have affected the data.
+This *should* be as simple as seeing if the current transforma and prior transform are isomorphic.
+If so, noop
+If not, publish a patch release.
+** New event
+Calculate new version based on existing knowledge
 * Additional support
 
 ** EDN->RDF->EDN
@@ -223,3 +231,32 @@ Have written code for edn->rdf. Need code for the inverse operation.
 Both should be based on a coherent data model and schema.
 
 Maybe this is a bigger problem than I want to solve right now. Should probably revisit it sometime in the future.
+
+* Next steps
+
+** Remove legacy website ID
+
+No reason to maintain this
+
+** unpack versioning
+
+I've put too much stuff into versioning 
+
+*** Renaming the proposition
+
+This deserves to be a separate step, either part of the sepio model, or performed shortly after sepio model.
+
+*** adding the changes
+
+*** calculating the version
+
+*** creating a merged model
+
+
+** store compound events
+
+Need to figure out how I want to store compound events. Seems like we need cloud storage for this; need to keep too many things at once and do not want to put them all on separate Kafka topics. There's too much data (potentially) to cram into a single event.
+
+Could write an output stream with a summary and a link to the cloud file. This seems like a reasonable compromise.
+
+
