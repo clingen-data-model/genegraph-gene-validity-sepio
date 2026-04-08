@@ -80,6 +80,11 @@
   :cg/Submitted
   :cg/Unpublished
   }}"]
+   [:gene-validity/secondary-contributor
+    "select ?gcep where 
+{ ?s a :cg/Statement ; :cg/contributions ?contrib .
+  ?contrib :cg/activityType :cg/SecondaryContribution ;
+  :cg/contributor ?gcep . }"]
    [:gene-validity/classification
     "
 select ?class where {
@@ -126,6 +131,7 @@ select ?role where {
    ::event/key
    ::event/kafka-topic
    ::event/value-hash
+   ::event/timestamp
    :gene-validity/last-outcome
    :gene-validity/curation-reasons
    :gene-validity/activity
@@ -144,7 +150,9 @@ select ?role where {
    :gene-validity/gene
    :gene-validity/disease
    :gene-validity/gcep
+   :gene-validity/secondary-contributor
    :gene-validity/classification
+   :versions
    #_:genegraph.transform.gene-validity.event-recorder/retrieved-from-store])
 
 (defn abbreviate [event]

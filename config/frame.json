@@ -9,14 +9,20 @@
 	"hgnc": "https://identifiers.org/hgnc:",
 	"rdfs": "http://www.w3.org/2000/01/rdf-schema#",
 	"cggv": "https://genegraph.clinicalgenome.org/r/gci/",
-	"evidenceStrength": {"@type": "@vocab"},
-	"calculatedEvidenceStrength": {"@type": "@vocab"},
-	"computedEvidenceStrength": {"@type": "@vocab"},
+	"classification": {"@type": "@vocab"},
+	"calculatedClassification": {"@type": "@vocab"},
 	"specifiedBy":  {"@type": "@vocab"},
 	"evidence": {"@container": "@set"},
+	"hasEvidenceLines": {"@container": "@set"},
 	"disease": {"@type": "@vocab"},
 	"gene": {"@type": "@vocab"},
+	"subject": {"@type": "@vocab"},
+	"predicate": {"@type": "@vocab"},
+	"qualifier": {"@type": "@vocab"},
+	"object": {"@type": "@vocab"},
 	"phenotypes": {"@type": "@id"},
+	"activityType": {"@type": "@vocab"},
+	"contributor": {"@type": "@id"},
 	"agent": {"@type": "@id"},
 	"role": {"@type": "@vocab"},
 	"modeOfInheritance": {"@type": "@vocab"},
@@ -24,6 +30,7 @@
 	"direction": {"@type": "@vocab"},
 	"ageType": {"@type": "@vocab"},
 	"ageUnit": {"@type": "@vocab"},
+	"allele": {"@type": "@id"},
 	"dc:source": {"@type": "@id"},
 	"curationReasons": {"@type": "@vocab",
 			    "@container": "@set"},
@@ -32,5 +39,5 @@
 	"websiteLegacyID": {"@type": "@id"}
 	
     },
-    "@type": "EvidenceStrengthAssertion"
+    "@type": "Statement"
 }

@@ -18,6 +18,7 @@
             [genegraph.framework.storage.rocksdb :as rocksdb]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
+            [charred.api :as charred]
             [clojure.java.io :as io]
             [clojure.set :as set])
   (:import [java.time Instant])
@@ -34,9 +35,11 @@
 (def local-env
   (case (or (:platform admin-env) (System/getenv "GENEGRAPH_PLATFORM"))
     "local" {:fs-handle {:type :file :base "data/base/"}
+             :public-fs-handle {:type :file :base "data/public/"}
              :versions {:gene-validity/gci-model 1
                         :gene-validity/unmodified-model 1
                         :gene-validity/model 1
+                        :gene-validity/json-ld 1
                         :gene-validity/website-event 1}
              :local-data-path "data/"}
     "dev" (assoc (env/build-environment "522856288592" ["dataexchange-genegraph"])
@@ -45,6 +48,8 @@
                  :kafka-user "User:2189780"
                  :fs-handle {:type :gcs
                              :bucket "genegraph-framework-dev"}
+                 :public-fs-handle {:type :gcs
+                                    :bucket "genegraph-dev-public"}
                  :local-data-path "/data")
     "stage" (assoc (env/build-environment "583560269534" ["dataexchange-genegraph"])
                    :version 1
@@ -52,11 +57,15 @@
                    :kafka-user "User:2592237"
                    :fs-handle {:type :gcs
                                :bucket "genegraph-gene-validity-sepio-stage-1"}
+                   :public-fs-handle {:type :gcs
+                                      :bucket "genegraph-stage-public"}
                    :local-data-path "/data")
     "prod" (assoc (env/build-environment "974091131481" ["dataexchange-genegraph"])
                   :version 1
                   :name "prod"
                   :kafka-user "User:2592237"
+                  :public-fs-handle {:type :gcs
+                                     :bucket "genegraph-public"}
                   :fs-handle {:type :gcs
                               :bucket "genegraph-gene-validity-sepio-prod-1"}
                   :local-data-path "/data")
@@ -202,13 +211,17 @@
 
 (defn tap-interceptor-fn [e]
   (when (:pp-model e) (rdf/pp-model (:gene-validity/model e)))
+  (when (:tap-json e) (-> e
+                          :gene-validity/json-ld
+                          charred/read-json
+                          tap>))
   (cond (:tap-abbrev e) (tap> (abbrev/abbreviate e))
         (:tap-without-models e) (tap> (dissoc e
                                               :gene-validity/gci-model
                                               :gene-validity/model
                                               :gene-validity/unmodified-model
                                               :gene-validity/previous-model))
-        (:tap-all e) (tap> e)) 
+        (:tap-all e) (tap> e))
   e)
 
 (def tap-interceptor
@@ -218,6 +231,7 @@
 
 (def saved-keys
   #{:gene-validity/gci-model
+    :gene-validity/json-ld
     :gene-validity/model
     :gene-validity/unmodified-model
     :gene-validity/website-event})
@@ -227,9 +241,9 @@
    :name :gene-validity-transform
    :subscribe :transform-topic
    #_#_:backing-store :gene-validity-version-store
-   ::event/metadata (select-keys env [:versions])
+   ::event/metadata (select-keys env [:versions :public-fs-handle])
    :interceptors [tap-interceptor
-                  recorder/record-event
+                  #_recorder/record-event
                   (recorder/add-saved-data saved-keys)
                   report-transform-errors
                   abbrev/add-initial-attributes

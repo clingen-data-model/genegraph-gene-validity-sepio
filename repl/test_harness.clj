@@ -256,7 +256,8 @@
 (comment
   (->> (gdm-id->events (second test-set) test-app)
        (take 1)
-       (map #(assoc % :tap-abbrev true :pp-model true))
+       #_(map #(assoc % :tap-abbrev true :pp-model true))
+       (map #(assoc % :tap-json true))
        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
 
   (->> (gdm-id->outcomes (second test-set) test-app)
@@ -337,9 +338,16 @@
                     (get-in % [::event/data :resourceParent :gdm :uuid])))
        (take 5)
        tap>)
+
+  (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
+                          {:prefix [:transforms :gene-validity/json-ld]
+                           :return :ref})
+       (take 1)
+       (mapv #(-> % deref charred/read-json))
+       tap>)
   
   (time (gv/reprocess-events test-app))
-
+  
   (->> (storage/scan @(get-in test-app
                               [:storage :gene-validity-version-store :instance])
                      [:outcomes])
@@ -373,5 +381,5 @@
   (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (storage/scan store [:outcomes "https://genegraph.clinicalgenome.org/r/a2d7ac24-7e2d-4a5a-90db-10dd997566bb"])                                    tap>))
 
-  "https://genegraph.clinicalgenome.org/r/a2d7ac24-7e2d-4a5a-90db-10dd997566bb"
-  )
+  "https://genegraph.clinicalgenome.org/r/a2d7ac24-7e2d-4a5a-90db-10dd997566bb")
+

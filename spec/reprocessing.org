@@ -234,13 +234,17 @@ Maybe this is a bigger problem than I want to solve right now. Should probably r
 
 * Next steps
 
-** Remove legacy website ID
+** DONE Remove legacy website ID
 
-No reason to maintain this
+No reason to maintain this.
 
-** unpack versioning
+Done.  Got rid of it.
 
-I've put too much stuff into versioning 
+** DONE unpack versioning
+
+I've put too much stuff into versioning.
+
+Done. Split changes out.
 
 *** Renaming the proposition
 
@@ -259,4 +263,42 @@ Need to figure out how I want to store compound events. Seems like we need cloud
 
 Could write an output stream with a summary and a link to the cloud file. This seems like a reasonable compromise.
 
+I think we're going to write these to cloud storage. Will just need a procedure to init the database and make sure everything is up to snuff.
 
+** DONE convince myself publishing without the consumer group is going to work
+
+The one guaranteed bit should be the intake, as long as I assume RocksDB writes are reliable enough without a transaction.
+
+This should also commit an event to the output queue (simple queue). This event should also be reliable.
+
+More likely failure modes:
+
+Interruption during processing
+Error or failure during send
+
+We need to be able to write a commit record to RocksDB after a record is sent and fully committed.
+
+Is it going to be an issue to resend multiple records (dropping the write once constraint?)
+
+Should I read from the topic to make sure records got written?
+
+Maybe there is a summary topic for this? Lightweight, tied to a Kafka commit (so guaranteed that records get written).
+
+JSON-LD topic
+RDF topic
+Summary topic
+All curation events
+
+Write event summaries to Kafka topic. Make sure all messages in event summaries have been written to Kafka (maybe await up-to-date). Probably not needed for proof of concept, but shouldn't dally on this one either.
+
+Should be able to get away with reading the keys of the incoming messages topic (maybe? -- no)
+Should write a smaller summary record for incoming events, so that we don't wind up having to deserialize the entire event on every startup.
+
+** Snapshot generation
+
+Bring in some of the relevant code for snapshot generation.
+
+
+** Documentation
+
+** API View

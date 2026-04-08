@@ -40,6 +40,9 @@
     :leave (fn [e] (leave-record-event-fn e))
     :error (fn [e] (error-record-event-fn e))}))
 
+;; record event (above) seems obsolete
+;; based on existence of :outcomes
+
 (defn saved-data [{::event/keys [offset]
                    :keys [versions]
                    :as event}

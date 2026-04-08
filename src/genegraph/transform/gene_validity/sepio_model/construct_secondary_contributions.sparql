@@ -4,8 +4,8 @@ prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 construct {
   ?classification cg:contributions _:contrib .
 
-  _:contrib cg:agent ?secondaryContributor ;
-  cg:role cg:SecondaryContributor .
+  _:contrib cg:contributor ?secondaryContributor ;
+  cg:activityType cg:SecondaryContribution .
 }
 where {
   ?classification a gci:provisionalClassification ;
