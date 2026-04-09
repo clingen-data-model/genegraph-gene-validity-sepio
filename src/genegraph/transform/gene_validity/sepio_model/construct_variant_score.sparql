@@ -10,7 +10,7 @@ prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 construct {
   ?evidenceLine a cg:EvidenceLine ;
   cg:strengthScore ?score ;
-  cg:evidence ?evidenceItem , ?functionEvidenceItem ; # evidence about variant
+  cg:hasEvidenceItems ?evidenceItem , ?functionEvidenceItem ; # evidence about variant
   cg:calculatedScore ?resultCalculatedScore ;
   cg:direction ?scoreStatus ;
   cg:specifiedBy ?criteria ;
@@ -61,13 +61,6 @@ where {
   gci:date_created ?date_created ;
   gci:affiliation ?affiliation .
   
-  # maschinations due to contradicts score_status do not have gci:caseInfoType
-  # OPTIONAL {
-  #   ?evidenceLine gci:variantType ?variantType .
-  #   ?variantType gcixform:hasEvidenceLineType ?evidenceLineType ;
-  #   gcixform:hasEvidenceItemType ?evidenceItemType .
-  # }
-
   OPTIONAL {
     ?evidenceLine gci:variantType / gcixform:criteria ?gciCriteria .
   }

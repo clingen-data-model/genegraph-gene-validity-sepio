@@ -99,12 +99,15 @@
                      "value.serializer"
                      "org.apache.kafka.common.serialization.StringSerializer"}})
 
-(defn reprocess-events [app]
-  (->> (rocksdb/range-get @(get-in app [:storage :gene-validity-version-store :instance])
-                          {:prefix [:events :gene-validity-complete]
-                           :return :ref})
-       (map deref)
-       (run! #(p/publish (get-in app [:topics :transform-topic]) %))))
+(defn reprocess-events
+  ([app]
+   (reprocess-events app {}))
+  ([app opts]
+   (->> (rocksdb/range-get @(get-in app [:storage :gene-validity-version-store :instance])
+                           {:prefix [:events :gene-validity-complete]
+                            :return :ref})
+        (map (fn [e] (merge @e opts)))
+        (run! #(p/publish (get-in app [:topics :transform-topic]) %)))))
 
 (def gene-validity-version-store
   {:name :gene-validity-version-store

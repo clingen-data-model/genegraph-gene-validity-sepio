@@ -8,7 +8,7 @@ construct
   ?experimentalEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityOverallExperimentalEvidenceCriteria ;
   cg:score ?experimentalEvidenceTotal ;
-  cg:hasEvidenceItems ?functionalEvidenceLine, ?functionalAlterationEvidenceLine, ?modelAndRescueEvidenceLine .
+  cg:hasEvidenceLines ?functionalEvidenceLine, ?functionalAlterationEvidenceLine, ?modelAndRescueEvidenceLine .
 
   ?functionalEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityOverallFunctionalEvidenceCriteria ;

@@ -3,7 +3,7 @@ prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 
 construct
 {
-  ?geneticEvidenceEvidenceLine cg:evidence
+  ?geneticEvidenceEvidenceLine cg:hasEvidenceLines
   ?autosomalDominantOtherVariantEvidenceLine ,
   ?autosomalDominantNullVariantEvidenceLine ,
   ?autosomalDominantDeNovoVariantEvidenceLine .

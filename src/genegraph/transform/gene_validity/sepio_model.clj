@@ -156,22 +156,6 @@ select ?gdm where
 { ?gdm a <https://genegraph.clinicalgenome.org/r/gdm> } "))
 
 
-;; Legacy unpublish action -- to remove after validation
-#_(defn unpublish-action [gci-data params]
-    (let [gdm-id (first (gdm-query gci-data))
-          unpublish-contribution-iri (rdf/resource
-                                      (str gdm-id
-                                           "_unpublish_"
-                                           (:publishTime params)))
-          affiliation (first (has-affiliation-query gci-data))]
-      (rdf/statements->model
-       [[gdm-id :rdf/type :cg/EvidenceStrengthAssertion]
-        [gdm-id :cg/contributions unpublish-contribution-iri]
-        [unpublish-contribution-iri :cg/role (:publishRole params)]
-        [unpublish-contribution-iri :dc/date (:publishTime params)]
-        [unpublish-contribution-iri :cg/agent affiliation]
-        [unpublish-contribution-iri :cg/gdm gdm-id]])))
-
 (defn unpublish-action [gci-data params]
   (let [gdm-id (first (gdm-query gci-data))
         unpublish-contribution-iri (rdf/resource
@@ -207,7 +191,7 @@ select ?gdm where
          (min 3                ; current cap on sop v8+ proband scores
               (reduce
                + 
-               (rdf/ld-> % [:cg/evidence
+               (rdf/ld-> % [:cg/hasEvidenceLines
                             :cg/strengthScore]))))
        proband-evidence-lines)))))
 

@@ -5,9 +5,8 @@ prefix dc: <http://purl.org/dc/terms/>
 
 construct {
   ?evidenceLine a cg:UnscoreableEvidence ;
-  cg:evidence ?article ;
+  dc:source ?article ;
   dc:description ?description .
-  
 }
 where {
   ?evidenceLine a gci:annotation ;

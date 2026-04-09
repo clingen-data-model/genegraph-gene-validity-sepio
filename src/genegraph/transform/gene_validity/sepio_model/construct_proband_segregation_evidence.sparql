@@ -25,7 +25,7 @@ construct {
   cg:modeOfInheritance ?familyMoi ;
   cg:ethnicity ?familyEthnicity .
 
-  ?segregationEvidenceLine cg:evidence ?segregationID .
+  ?segregationEvidenceLine cg:hasEvidenceItems ?segregationID .
 }
 where {
 

@@ -233,6 +233,9 @@ Both should be based on a coherent data model and schema.
 Maybe this is a bigger problem than I want to solve right now. Should probably revisit it sometime in the future.
 
 * Next steps
+** Collection types in JSON-LD frame
+Some types in JSON-LD should be expected to be collections, and should be noted as such.
+*** demonstrates is colleciton type
 
 ** DONE Remove legacy website ID
 

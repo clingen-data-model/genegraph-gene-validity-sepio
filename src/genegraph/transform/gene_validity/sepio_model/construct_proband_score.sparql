@@ -11,7 +11,7 @@ construct {
   ?probandScoreEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy ?criteria ;
   cg:strengthScore ?score ;
-  cg:evidence ?individual ; 
+  cg:hasEvidenceItems ?individual ; 
   cg:calculatedScore ?calculatedScore ;
   cg:direction  ?scoreStatus ;
   dc:description ?evidenceLineDescription .

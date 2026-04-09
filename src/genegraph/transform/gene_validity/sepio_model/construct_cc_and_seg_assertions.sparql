@@ -3,7 +3,7 @@ prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 
 construct
 {
-  ?geneticEvidenceLine cg:evidence ?caseControlEvidenceLine , ?segregationEvidenceLine .
+  ?geneticEvidenceLine cg:hasEvidenceLines ?caseControlEvidenceLine , ?segregationEvidenceLine .
 
   ?caseControlEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityOverallCaseControlEvidenceCriteria ;

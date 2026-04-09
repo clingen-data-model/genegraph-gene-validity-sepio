@@ -15,8 +15,8 @@ where
   minus {
     ?s a cg:EvidenceLine ;
     cg:specifiedBy cg:GeneValidityOverallGeneticEvidenceCriteria ;
-    cg:evidence ?o .
-    ?pbel cg:evidence ?o ;
+    cg:hasEvidenceLines ?o .
+    ?pbel cg:hasEvidenceLines ?o ;
     cg:specifiedBy cg:GeneValidityMaximumProbandScoreCriteria .
     { ?o
       cg:specifiedBy

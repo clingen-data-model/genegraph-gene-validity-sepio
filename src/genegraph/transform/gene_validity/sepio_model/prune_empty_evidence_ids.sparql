@@ -9,7 +9,7 @@ where
 {
   ?s ?p ?o .
   FILTER NOT EXISTS {
-    ?s cg:evidence ?o .
+    ?s cg:hasEvidenceLines / cg:hasEvidenceItems ?o .
     FILTER NOT EXISTS {
       ?o a ?objecType
     }

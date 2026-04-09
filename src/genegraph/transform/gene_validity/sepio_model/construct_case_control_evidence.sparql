@@ -8,7 +8,7 @@ construct {
   ?evidenceLine a cg:EvidenceLine ;
   cg:specifiedBy ?criteria ;
   dc:description ?comments ;
-  cg:evidence ?evidenceItem ;
+  cg:hasEvidenceItems ?evidenceItem ;
   cg:strengthScore ?score ;
   cg:direction ?scoreStatus .
 
@@ -34,7 +34,7 @@ construct {
   cg:detectionMethod ?caseDetectionMethod ;
   cg:alleleFrequency ?caseAlleleFrequency ;
   cg:relatedCondition ?commonDiagnosis ;
-  cg:evidence ?evidenceItem .
+  cg:hasEvidenceItems ?evidenceItem .
 
   # Control cohort study
   ?controlCohort a cg:Cohort ; # stato
@@ -42,7 +42,7 @@ construct {
   cg:numWithVariant ?controlNumWithVariant ;
   cg:detectionMethod ?controlDetectionMethod ;
   cg:alleleFrequency ?controlAlleleFrequency ;
-  cg:evidence ?evidenceItem .
+  cg:hasEvidenceItems ?evidenceItem .
 }
 where {
   ?evidenceLine a gci:caseControl ;

@@ -8,7 +8,7 @@ construct {
   ?evidenceLine  a cg:EvidenceLine ;
   cg:specifiedBy ?criteria ;
   dc:description ?scoreDescription ;
-  cg:evidence ?evidenceItem ;
+  cg:hasEvidenceItems ?evidenceItem ;
   cg:direction ?scoreStatus ;
   cg:calculatedScore ?calculatedScore ;
   cg:strengthScore ?score .

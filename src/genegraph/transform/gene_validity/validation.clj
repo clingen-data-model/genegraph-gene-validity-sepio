@@ -10,7 +10,11 @@
   (= :cg/Unpublished (:cg/activityType event)))
 
 (def tests
-  [{:name :has-statement
+  [{:name :no-obsolete-evidence-predicate
+    :check-fn (fn [{:gene-validity/keys [model]}]
+                (empty? ((rdf/create-query
+                         "select ?s where { ?s :cg/evidence ?o }") model)))}
+   {:name :has-statement
     :check-fn (fn [{:gene-validity/keys [model]}]
                 (= 1 (count ((rdf/create-query "select ?x where { ?x a :cg/Statement }") model))))}
    {:name :has-kafka-iri

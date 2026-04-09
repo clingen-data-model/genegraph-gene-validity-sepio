@@ -15,7 +15,8 @@ construct {
   ?probandScoreEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityMaximumProbandScoreCriteria ;
   cg:direction ?scoreStatus ;
-  cg:evidence ?individual , ?variantEvidenceLine .
+  cg:hasEvidenceItems ?individual ;
+  cg:hasEvidenceLines ?variantEvidenceLine .
 } where {
 
   ?individual gci:variantScores ?variantEvidenceLine .

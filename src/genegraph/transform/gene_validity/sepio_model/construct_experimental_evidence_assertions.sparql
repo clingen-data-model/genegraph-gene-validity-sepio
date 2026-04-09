@@ -3,12 +3,12 @@ prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 
 construct
 {
-  ?classification cg:evidence ?experimentalEvidenceLine .
+  ?classification cg:hasEvidenceLines ?experimentalEvidenceLine .
   
   ?experimentalEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityOverallExperimentalEvidenceCriteria ;
   cg:strengthScore ?experimentalEvidenceTotal ;
-  cg:evidence ?functionalEvidenceLine, ?functionalAlterationEvidenceLine, ?modelAndRescueEvidenceLine .
+  cg:hasEvidenceLines ?functionalEvidenceLine, ?functionalAlterationEvidenceLine, ?modelAndRescueEvidenceLine .
 
   ?functionalEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityOverallFunctionalEvidenceCriteria ;

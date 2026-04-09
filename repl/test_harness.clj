@@ -342,17 +342,32 @@
   (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
                           {:prefix [:transforms :gene-validity/json-ld]
                            :return :ref})
-       (take 1)
+       (take 5)
        (mapv #(-> % deref charred/read-json))
        tap>)
   
-  (time (gv/reprocess-events test-app))
+  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/json-ld
+                                                       :gene-validity/model}}))
+  (+ 1 1)
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         (remove :gene-validity/valid)
+         count))
   
-  (->> (storage/scan @(get-in test-app
-                              [:storage :gene-validity-version-store :instance])
-                     [:outcomes])
-       (take 1)
-       tap>)
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         (remove :gene-validity/valid)
+         (take 1)
+         (map #(-> (storage/read db [:transforms :gene-validity/json-ld (::event/offset %) 1])
+                   charred/read-json))
+         tap>))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         (remove :gene-validity/valid)
+         (take 1)
+         (run! #(-> (storage/read db [:transforms :gene-validity/model (::event/offset %) 1])
+                    rdf/pp-model))))
 
   ;; check for type of failed tests
   (->> (storage/scan @(get-in test-app
