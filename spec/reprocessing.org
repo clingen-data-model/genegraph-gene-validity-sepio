@@ -233,6 +233,18 @@ Both should be based on a coherent data model and schema.
 Maybe this is a bigger problem than I want to solve right now. Should probably revisit it sometime in the future.
 
 * Next steps
+** Deployment
+
+Can I just send it now? Do I need anything else?
+
+
+
+** Errors
+*** Disconnected evidence lines
+Segregations with no scored variants, but individuals noted in a segregation, seem to generate disconnected segregation evidence lines.
+
+TNNT2 -- HCM -- unclear
+
 ** Collection types in JSON-LD frame
 Some types in JSON-LD should be expected to be collections, and should be noted as such.
 *** demonstrates is colleciton type
@@ -305,3 +317,5 @@ Bring in some of the relevant code for snapshot generation.
 ** Documentation
 
 ** API View
+
+

@@ -11,9 +11,13 @@
 
 (def tests
   [{:name :no-obsolete-evidence-predicate
+    :comment "May be able to remove."
     :check-fn (fn [{:gene-validity/keys [model]}]
                 (empty? ((rdf/create-query
-                         "select ?s where { ?s :cg/evidence ?o }") model)))}
+                          "
+select ?s where 
+{ ?s ( :cg/hasEvidenceLine | :cg/hasEvidenceItem | :cg/evidence ) ?o }"
+                          ) model)))}
    {:name :has-statement
     :check-fn (fn [{:gene-validity/keys [model]}]
                 (= 1 (count ((rdf/create-query "select ?x where { ?x a :cg/Statement }") model))))}

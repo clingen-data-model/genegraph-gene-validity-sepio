@@ -15,6 +15,7 @@
             [genegraph.framework.storage.rocksdb :as rocksdb]
             [genegraph.framework.storage :as storage]
             [genegraph.framework.processor :as processor]
+            [genegraph.transform.gene-validity.snapshot :as snapshot]
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]
             [portal.api :as portal]
@@ -251,9 +252,62 @@
          sort
          (map #(storage/read store [:events :gene-validity-complete %])))))
 
+
+;; Fetch associated data--maybe these should be in
+;; event recorder
+(defn outcome->json [event db]
+  (if-let [json-str (storage/read db [:transforms
+                                      :gene-validity/json-ld
+                                      (::event/offset event)
+                                      (get-in event [:versions
+                                                     :gene-validity/json-ld])])]
+    (assoc event ::json (charred/read-json json-str))
+    (assoc event ::error :json-not-found)))
+
+(defn outcome->model [event db]
+  (if-let [model (storage/read db [:transforms
+                                      :gene-validity/model
+                                      (::event/offset event)
+                                      (get-in event [:versions
+                                                     :gene-validity/model])])]
+    (assoc event :gene-validity/model model)
+    (assoc event ::error :model-not-found)))
+
+(defn outcome->event [outcome db]
+  (storage/read db [:events
+                    :gene-validity-complete
+                    (::event/offset outcome)]))
+
 ;; adding the take statement
 ;; seems to prevent a race condition
 (comment
+
+  ;; Evaluating the disconnected evidence lines that show up in production
+  ;; Only 5, but seem hard to characterize s-
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "
+select ?el where {
+  ?el a :cg/EvidenceLine .
+  ?a a :cg/Statement .
+  filter not exists { ?a (:cg/hasEvidenceLines|:cg/hasEvidenceItems|:cg/evidence)* ?el . }
+}")]
+    (->> (snapshot/latest-records store)
+         (remove :gene-validity/valid)
+         #_(take 1)
+         #_(map #(outcome->json % store))
+         #_(map #(outcome->model % store))
+         #_(map #(q (:gene-validity/model %)))
+         count))
+  
+  (time
+   (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+     (->> (snapshot/latest-records store)
+          (filter #(= (:gene-validity/gene %)
+                      "https://identifiers.org/hgnc:17601"))
+          (map #(outcome->json % store))
+          tap>)))
+
+  
   (->> (gdm-id->events (second test-set) test-app)
        (take 1)
        #_(map #(assoc % :tap-abbrev true :pp-model true))
@@ -378,7 +432,7 @@
        (reduce concat)
        set)
 
- (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (storage/scan store [:outcomes])
          (filter #(get (:gene-validity/activity %) :cg/Submitted))
          (group-by :gene-validity/gdm)
