@@ -5,7 +5,8 @@
             [clojure.string :as s]
             [clojure.walk :refer [postwalk]]
             [clojure.edn :as edn]
-            [clojure.data.json :as json]
+            #_[clojure.data.json :as json]
+            [charred.api :as charred]
             [io.pedestal.interceptor :as interceptor])
   (:import [java.io ByteArrayInputStream]))
 
@@ -30,7 +31,7 @@
 (def context
   (s/join ""
         (drop-last
-         (json/write-str
+         (charred/write-json-str
           {"@context" 
            {
             ;; frontmatter
@@ -325,7 +326,7 @@
 (defn preprocess-json
   "Walk GCI JSON prior to parsing as JSON-LD to clean up data."
   [data]
-  (json/write-str
+  (charred/write-json-str
    (postwalk #(-> %
                   clear-associated-snapshots
                   fix-hpo-ids

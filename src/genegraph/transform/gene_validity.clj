@@ -51,7 +51,9 @@
                  :public-fs-handle {:type :gcs
                                     :bucket "genegraph-dev-public"}
                  :local-data-path "/data")
-    "stage" (assoc (env/build-environment "583560269534" ["dataexchange-genegraph"])
+    "stage" (assoc (env/build-environment #_"583560269534"
+                                          "974091131481"
+                                          ["dataexchange-genegraph"])
                    :version 1
                    :name "stage"
                    :kafka-user "User:2592237"

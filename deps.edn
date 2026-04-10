@@ -13,7 +13,8 @@
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test}
   :build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.6"
-                                                :git/sha "8e78bcc"}}
+                                                :git/sha "8e78bcc"}
+                 com.cnuernber/charred {:mvn/version "1.038"}}
           :ns-default build}
   :dev {:extra-deps {djblue/portal {:mvn/version "0.62.1"}
                      hato/hato {:mvn/version "1.0.0"}

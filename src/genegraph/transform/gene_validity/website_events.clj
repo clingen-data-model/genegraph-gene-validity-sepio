@@ -7,7 +7,8 @@
             [io.pedestal.log :as log]
             [io.pedestal.interceptor :as interceptor]
             [clojure.java.io :as io]
-            [clojure.data.json :as json]
+            #_[clojure.data.json :as json]
+            [charred.api :as charred]
             [clojure.spec.alpha :as s]))
 
 
@@ -519,12 +520,12 @@ select ?x where {
                       (dissoc :gene-validity/gci-model)
                       :gene-validity/website-event))
             (remove nil?)
-            (map #(str (clojure.data.json/write-str %) "\n"))
+            (map #(str (charred/write-json-str %) "\n"))
             (run! #(.write w %))))))
 
   (with-open [r (io/reader "/Users/tristan/Desktop/curation-events-sample.ndjson")]
     (->> (line-seq r)
-         (map #(json/read-str % :key-fn keyword))
+         (map #(charred/read-json % :key-fn keyword))
          (remove #(s/valid? ::event-data %))
          (take 1)
          (run! #(s/explain ::event-data %))))
@@ -533,7 +534,7 @@ select ?x where {
   
   (with-open [r (io/reader "/Users/tristan/Desktop/curation-events-sample.ndjson")]
     (->> (line-seq r)
-         (map #(json/read-str % :key-fn keyword))
+         (map #(charred/read-json % :key-fn keyword))
          #_(take 5)
          (filterv #(re-find #"815e0f84-b530-4fd2-81a9-02e02bf352ee" ;; abcd1
                               (get-in % [:references :alternate_uuid])))
@@ -547,7 +548,7 @@ select ?x where {
     (tap>
      (update-vals
       (->> (line-seq r)
-           (map #(json/read-str % :key-fn keyword))
+           (map #(charred/read-json % :key-fn keyword))
            (filter #(re-find #"d1230a85-2a8b-4321-b36d-213daae9a28a"
                              (get-in %
                               [:references
@@ -559,7 +560,7 @@ select ?x where {
 
   (with-open [r (io/reader "/Users/tristan/Desktop/curation-events-sample.ndjson")]
     (->> (line-seq r)
-         (map #(json/read-str % :key-fn keyword))
+         (map #(charred/read-json % :key-fn keyword))
          (filterv #(re-find #"d1230a85-2a8b-4321-b36d-213daae9a28a"
                            (get-in %
                                    [:references
