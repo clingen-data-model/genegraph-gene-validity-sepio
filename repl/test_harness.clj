@@ -447,6 +447,8 @@ select ?el where {
          (filter #(pos? (:broken-links %)))                                                            
          count))
 
+  (tap> gv/env)
+
   (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (storage/scan store [:outcomes "https://genegraph.clinicalgenome.org/r/a2d7ac24-7e2d-4a5a-90db-10dd997566bb"])                                    tap>))
 

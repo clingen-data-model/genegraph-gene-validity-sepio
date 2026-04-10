@@ -27,7 +27,7 @@
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
           (System/getenv "DX_JAAS_CONFIG")) ; prevent this in cloud deployments
-    {:platform "local"
+    {:platform "stage"
      :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG")
      :local-data-path "data/"}
     {}))
@@ -55,8 +55,15 @@
                    :version 1
                    :name "stage"
                    :kafka-user "User:2592237"
+                   :versions {:gene-validity/gci-model 1
+                              :gene-validity/unmodified-model 1
+                              :gene-validity/model 1
+                              :gene-validity/json-ld 1
+                              :gene-validity/website-event 1}
                    :fs-handle {:type :gcs
                                :bucket "genegraph-gene-validity-sepio-stage-1"}
+                   :rdf-topic "gene-validity-sepio-stage"
+                   :json-topic "gene-validity-sepio-jsonld-stage"
                    :public-fs-handle {:type :gcs
                                       :bucket "genegraph-stage-public"}
                    :local-data-path "/data")
@@ -299,14 +306,14 @@
   {:name :gene-validity-sepio
    :kafka-cluster :data-exchange
    :serialization ::rdf/n-triples
-   :kafka-topic "gene-validity-sepio"
+   :kafka-topic (:rdf-topic env "gene-validity-sepio-stage")
    :kafka-topic-config {"cleanup.policy" "compact"
                         "delete.retention.ms" "100"}})
 
 (def gene-validity-sepio-jsonld-topic 
   {:name :gene-validity-sepio
    :kafka-cluster :data-exchange
-   :kafka-topic "gene-validity-sepio-jsonld"
+   :kafka-topic (:json-topic env "gene-validity-sepio-jsonld-stage")
    :kafka-topic-config {"cleanup.policy" "compact"
                         "delete.retention.ms" "100"}})
 
@@ -328,8 +335,7 @@
    :kafka-clusters {:data-exchange data-exchange}
    :topics {:gene-validity-complete
             (assoc gene-validity-complete-topic
-                   :type :kafka-consumer-group-topic
-                   :kafka-consumer-group consumer-group
+                   :type :kafka-reader-topic
                    :buffer-size 5
                    :reset-opts {})
             :transform-topic

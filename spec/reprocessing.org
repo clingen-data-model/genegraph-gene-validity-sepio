@@ -237,6 +237,10 @@ Maybe this is a bigger problem than I want to solve right now. Should probably r
 
 Can I just send it now? Do I need anything else?
 
+Send it, consider this a stage deployment.
+
+Send data to new (stage) topics.
+
 
 
 ** Errors
