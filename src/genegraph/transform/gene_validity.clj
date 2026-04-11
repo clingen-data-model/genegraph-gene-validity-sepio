@@ -65,9 +65,10 @@
                               :gene-validity/json-ld 1
                               :gene-validity/website-event 1}
                    :fs-handle {:type :gcs
-                               :bucket "genegraph-gene-validity-sepio-stage-1"}
+                               :bucket "genegraph-gene-validity-sepio-stage"}
                    :rdf-topic "gene-validity-sepio-stage"
                    :json-topic "gene-validity-sepio-jsonld-stage"
+                   :records-topic "gene-validity-records-stage"
                    :public-fs-handle {:type :gcs
                                       :bucket "genegraph-stage-public"}
                    :local-data-path "/data")
@@ -285,15 +286,18 @@
    :interceptors [snapshot/write-snapshots]})
 
 (defn gci-event-fn [event]
-  (-> event
-      (event/store
-       :gene-validity-version-store
-       [:events :gene-validity-complete (::event/offset event)]
-       (select-keys event [::event/key
-                           ::event/data
-                           ::event/offset
-                           ::event/kafka-topic
-                           ::event/timestamp]))))
+  (let [e1 (select-keys event [::event/key
+                               ::event/data
+                               ::event/offset
+                               ::event/kafka-topic
+                               ::event/timestamp])]
+    (-> event
+        (event/store
+         :gene-validity-version-store
+         [:events :gene-validity-complete (::event/offset event)]
+         e1)
+        (event/publish {::event/topic :transform-topic
+                        ::event/data e1}))))
 
 (def gci-event
   (interceptor/interceptor
