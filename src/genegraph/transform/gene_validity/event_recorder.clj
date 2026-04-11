@@ -127,17 +127,21 @@
     :leave (fn [e] (store-results e data-keys))}))
 
 (defn model-from-previous-data-version [event]
-  (let [m (storage/read
-              (get-in event [::storage/storage
-                             :gene-validity-version-store])
-              [:transforms
-               :gene-validity/model
-               (::event/offset event)
-               (dec (get-in event [:versions
-                                   :gene-validity/model]))])]
-    (if (= ::storage/miss m)
-      nil
-      m)))
+  (try
+    (let [m (storage/read
+             (get-in event [::storage/storage
+                            :gene-validity-version-store])
+             [:transforms
+              :gene-validity/model
+              (::event/offset event)
+              (dec (get-in event [:versions
+                                  :gene-validity/model]))])]
+      (if (= ::storage/miss m)
+        nil
+        m))
+    (catch Exception e
+      (tap> event)
+      nil)))
 
 (defn outcome-from-previous-data-version [event]
   (let [o (storage/read

@@ -305,8 +305,9 @@
          :gene-validity-version-store
          [:events :gene-validity-complete (::event/offset event)]
          e1)
-        (event/publish {::event/topic :transform-topic
-                        ::event/data e1}))))
+        (event/publish #_{::event/topic :transform-topic
+                        ::event/data e1}
+                       (assoc e1 ::event/topic :transform-topic)))))
 
 (def gci-event
   (interceptor/interceptor

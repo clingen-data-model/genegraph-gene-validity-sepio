@@ -66,7 +66,7 @@
   (time
    (event-store/with-event-reader [r source-file]
      (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
-           (event-store/event-seq r))))
+           (take 1 (event-store/event-seq r)))))
 
   (time
    (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
