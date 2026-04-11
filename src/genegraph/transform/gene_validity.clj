@@ -241,9 +241,16 @@
         (:tap-all e) (tap> e))
   e)
 
+(defn log-incoming-message [e]
+  (log/info :interceptor ::tap-interceptor
+            :on :enter
+            :key (::event/key e))
+  e)
+
 (def tap-interceptor
   (interceptor/interceptor
    {:name :tap-interceptor
+    :enter (fn [e] (log-incoming-message e))
     :leave (fn [e] (tap-interceptor-fn e))}))
 
 (def saved-keys
@@ -291,6 +298,8 @@
                                ::event/offset
                                ::event/kafka-topic
                                ::event/timestamp])]
+    (log/info :interceptor ::gci-event
+              :key (::event/key event))
     (-> event
         (event/store
          :gene-validity-version-store
