@@ -7,7 +7,8 @@
             [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.storage.rocksdb :as rocksdb]
             [genegraph.framework.storage :as storage]
-            [io.pedestal.log :as log])
+            [io.pedestal.log :as log]
+            [io.pedestal.interceptor :as interceptor])
   (:import [java.io BufferedOutputStream]
            [org.apache.commons.compress.archivers.tar
             TarArchiveEntry TarArchiveOutputStream]
@@ -23,13 +24,17 @@
      (s/replace (:gene-validity/gdm record)
                 #"https://genegraph.clinicalgenome.org/r/"
                 "")
-     "--" major "." minor "." patch "." extension)))  
+     "--" major "." minor "." patch "." extension)))
 
-(defn latest-records [db]
-  (->> (storage/scan db [:outcomes])
+(defn filter-latest-published-records [records]
+  (->> records
        (reduce (fn [m e] (assoc m (:gene-validity/gdm e) e)) {})
        vals
        (filter #(get (:gene-validity/activity %) :cg/Submitted))))
+
+(defn latest-records [db]
+  (->> (storage/scan db [:outcomes])
+       filter-latest-published-records))
 
 (defn record->serialized-model
   "Use the data serialization interface in genegraph.framework.event
@@ -85,7 +90,39 @@
                       :filename (record->filename r "json")}))
        (records->archive handle)))
 
+(defn write-snapshots-fn [e]
+  (let [db (get-in e [::storage/storage :gene-validity-version-store])
+        all-records (storage/scan db [:outcomes])
+        latest-records (filter-latest-published-records all-records)
+        handle-base (:public-fs-handle e)]
+    (log/info :interceptor ::write-snapshots :status :starting-snapshot)
+    (write-json db
+                (assoc handle-base
+                       :path
+                       "clingen-gene-validity-json-all.tar.gz")
+                all-records)
+    (write-json db
+                (assoc handle-base
+                       :path
+                       "clingen-gene-validity-json-latest.tar.gz")
+                latest-records)
+    (write-nt db
+              (assoc handle-base
+                     :path
+                     "clingen-gene-validity-nt-all.tar.gz")
+              all-records)
+    (write-nt db
+              (assoc handle-base
+                     :path
+                     "clingen-gene-validity-nt-latest.tar.gz")
+              latest-records)
+    (log/info :interceptor ::write-snapshots :status :snapshot-complete)
+    e))
 
+(def write-snapshots
+  (interceptor/interceptor
+   {:name ::write-snapshots
+    :enter (fn [e] (write-snapshots-fn e))}))
 
 (comment
   (time

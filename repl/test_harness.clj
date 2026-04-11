@@ -130,7 +130,13 @@
              :name :all-curation-events}
             :transform-topic
             {:type :simple-queue-topic
-             :name :transform-topic}}
+             :name :transform-topic}
+            :processing-records-topic
+            {:type :simple-queue-topic
+             :name :processing-records-topic}
+            :trigger-snapshot
+            {:type :simple-queue-topic
+             :name :trigger-snapshot}}
    :storage {:gene-validity-version-store
              (assoc gv/gene-validity-version-store :reset-opts {})
              :curation-output curation-output}
@@ -138,13 +144,18 @@
                 (assoc gv/transform-processor
                        :type :parallel-processor
                        :gate-fn gdm-id)
+                :status-processor gv/status-processor
                 :gci-event-processor gv/gci-event-processor
                 :gene-validity-sepio-output
                 (create-record-output-processor :gene-validity-sepio)
                 :gene-validity-jsonld-output
                 (create-record-output-processor :gene-validity-sepio-jsonld)
                 :all-curation-events-output
-                (create-record-output-processor :all-curation-events)}})
+                (create-record-output-processor :all-curation-events)
+                :processing-records-output
+                (create-record-output-processor :processing-records-topic)
+                :snapshot-writer gv/snapshot-writer}
+   :http-servers gv/gv-ready-server})
 
 
 ;; ---------------------------------------------------------------------------
@@ -281,6 +292,8 @@
 ;; adding the take statement
 ;; seems to prevent a race condition
 (comment
+  ;;test snapshot generation
+  (p/publish (get-in test-app [:topics :trigger-snapshot]) {::event/data {:snapshot :triggered}})
 
   ;; Evaluating the disconnected evidence lines that show up in production
   ;; Only 5, but seem hard to characterize s-

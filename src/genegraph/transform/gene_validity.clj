@@ -12,6 +12,8 @@
             [genegraph.transform.gene-validity.validation :as validation]
             [genegraph.transform.gene-validity.abbreviate :as abbrev]
             [genegraph.transform.gene-validity.changes :as changes]
+            [genegraph.transform.gene-validity.status :as status]
+            [genegraph.transform.gene-validity.snapshot :as snapshot]
             [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.storage.rdf.jsonld :as jsonld]
             [genegraph.framework.storage :as storage]
@@ -27,7 +29,7 @@
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
           (System/getenv "DX_JAAS_CONFIG")) ; prevent this in cloud deployments
-    {:platform "stage"
+    {:platform "local"
      :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG")
      :local-data-path "data/"}
     {}))
@@ -154,7 +156,9 @@
                          (set/rename-keys {::event/iri ::event/key
                                            :gene-validity/json-ld ::event/data})
                          (select-keys [::event/key ::event/data])
-                         (assoc ::event/topic :gene-validity-sepio-jsonld)))))
+                         (assoc ::event/topic :gene-validity-sepio-jsonld)))
+      (event/publish {::event/data (abbrev/abbreviate event)
+                      ::event/topic :processing-records-topic})))
 
 (def add-publish-actions
   (interceptor/interceptor
@@ -273,6 +277,13 @@
                   add-jsonld
                   add-publish-actions]})
 
+(def snapshot-writer
+  {:type :processor
+   :name :snapshot-writer
+   :subscribe :trigger-snapshot
+   ::event/metadata (select-keys env [:public-fs-handle :versions])
+   :interceptors [snapshot/write-snapshots]})
+
 (defn gci-event-fn [event]
   (-> event
       (event/store
@@ -313,16 +324,32 @@
                         "delete.retention.ms" "100"}})
 
 (def gene-validity-sepio-jsonld-topic 
-  {:name :gene-validity-sepio
+  {:name :gene-validity-sepio-jsonld
    :kafka-cluster :data-exchange
    :kafka-topic (:json-topic env "gene-validity-sepio-jsonld-stage")
    :kafka-topic-config {"cleanup.policy" "compact"
                         "delete.retention.ms" "100"}})
 
+(def processing-records-topic
+  {:name :processing-records-topic
+   :kafka-cluster :data-exchange
+   :serialization :edn
+   :kafka-topic (:records-topic env "gene-validity-records-stage")
+   :kafka-topic-config {}})
+
+(def status-processor
+  {:name :status-processor
+   :type :processor
+   :interceptors [status/report-status]})
+
+
 (def gv-ready-server
   {:gene-validity-server
    {:type :http-server
     :name :gv-ready-server
+    :endpoints [{:path "/status"
+                 :processor :status-processor
+                 :method :get}]
     :routes
     [["/ready"
       :get (fn [_] {:status 200 :body "server is ready"})
@@ -350,13 +377,24 @@
             :gene-validity-sepio-jsonld
             (assoc gene-validity-sepio-jsonld-topic
                    :type :kafka-producer-topic
-                   :reset-opts {:clear-topic true})}
+                   :reset-opts {:clear-topic true})
+            :processing-records-topic
+            (assoc processing-records-topic
+                   :type :kafka-producer-topic
+                   :reset-opts {:clear-topic true})
+            :trigger-snapshot
+            {:name :trigger-snapshot
+             :type :timer-topic
+             :interval (* 1000 60 60)}}
    :storage {:gene-validity-version-store (assoc gene-validity-version-store
                                                  :reset-opts {:destroy-snapshot true})}
    :processors {:gene-validity-transform
                 (assoc transform-processor
                        :kafka-cluster :data-exchange
-                       :kafka-transactional-id (qualified-kafka-name "gv-transform"))}
+                       :kafka-transactional-id (qualified-kafka-name "gv-transform"))
+                :gci-event-processor gci-event-processor
+                :snapshot-writer snapshot-writer
+                :status-processor status-processor}
    :http-servers gv-ready-server})
 
 (defn store-snapshots! [app]
