@@ -35,14 +35,19 @@
       (get-in e [::event/data :resourceParent :gdm :uuid])
       (get-in e [::event/data :properties :resourceParent :gdm :uuid])))
 
+(def source-file
+  "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-04-13.edn.gz")
 
 (comment
+
+  ;; start portal
   (do
     (def portal (portal/open))
     (add-tap #'portal/submit))
   (portal/close)
   (portal/clear)
-  
+
+  ;; start test app
   (do
     (def test-app (p/init test-app-def))
     (p/start test-app)
@@ -53,10 +58,10 @@
                         ::event/skip-local-effects true
                         ::event/skip-publish-effects true))))
 
+  ;; stop test app
   (p/stop test-app)
 
-  (def source-file
-    "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-04-02.edn.gz")
+
   
   (tap> test-app))
 
@@ -66,7 +71,9 @@
   (time
    (event-store/with-event-reader [r source-file]
      (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
-           (take 1 (event-store/event-seq r)))))
+           (event-store/event-seq r))))
+
+  (+ 1 1)
 
   (time
    (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
@@ -324,7 +331,7 @@ select ?el where {
   (->> (gdm-id->events (second test-set) test-app)
        (take 1)
        #_(map #(assoc % :tap-abbrev true :pp-model true))
-       (map #(assoc % :tap-json true))
+       (map #(assoc % :tap-without-models true))
        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
 
   (->> (gdm-id->outcomes (second test-set) test-app)
@@ -467,3 +474,25 @@ select ?el where {
 
   "https://genegraph.clinicalgenome.org/r/a2d7ac24-7e2d-4a5a-90db-10dd997566bb")
 
+;; testing production version 
+(comment
+  ;; events sourced from Kafka don't publish to transform topic
+  (def prod-app (p/init gv/gv-transformer-def))
+  (p/start prod-app)
+  (p/stop prod-app)
+
+
+  ;; events sourced locally through simple-queue-topic do publish to transform topic
+  (def prod-app-1
+    (p/init (assoc-in gv/gv-transformer-def
+                      [:topics :gene-validity-complete]
+                      {:name :gene-validity-complete
+                       :type :simple-queue-topic})))
+  (p/start prod-app-1)
+
+  (time
+   (event-store/with-event-reader [r source-file]
+     (run! #(p/publish (get-in prod-app-1 [:topics :gene-validity-complete]) %)
+           (take 1 (event-store/event-seq r)))))
+  
+  )

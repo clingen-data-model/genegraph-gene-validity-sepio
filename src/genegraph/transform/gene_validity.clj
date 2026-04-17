@@ -29,7 +29,7 @@
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
           (System/getenv "DX_JAAS_CONFIG")) ; prevent this in cloud deployments
-    {:platform "local"
+    {:platform "stage"
      :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG")
      :local-data-path "data/"}
     {}))
@@ -158,6 +158,11 @@
                                            :gene-validity/json-ld ::event/data})
                          (select-keys [::event/key ::event/data])
                          (assoc ::event/topic :gene-validity-sepio-jsonld)))
+      (event/publish (-> event
+                         (set/rename-keys {::event/iri ::event/key
+                                           :gene-validity/website-event ::event/data})
+                         (select-keys [::event/key ::event/data])
+                         (assoc ::event/topic :all-curation-events)))
       (event/publish {::event/data (abbrev/abbreviate event)
                       ::event/topic :processing-records-topic})))
 
@@ -242,7 +247,7 @@
   e)
 
 (defn log-incoming-message [e]
-  (log/info :interceptor ::tap-interceptor
+  #_(log/info :interceptor ::tap-interceptor
             :on :enter
             :key (::event/key e))
   e)
@@ -280,7 +285,7 @@
                   abbrev/add-model-attributes
                   changes/add-changes
                   versioning/add-version
-                  #_website-event/website-version-interceptor
+                  website-event/website-version-interceptor
                   validation/validate
                   add-jsonld
                   add-publish-actions]})
@@ -298,8 +303,6 @@
                                ::event/offset
                                ::event/kafka-topic
                                ::event/timestamp])]
-    (log/info :interceptor ::gci-event
-              :key (::event/key event))
     (-> event
         (event/store
          :gene-validity-version-store
@@ -318,6 +321,14 @@
    :subscribe :gene-validity-complete
    :backing-store :gene-validity-version-store
    :interceptors [gci-event]})
+
+(def all-curation-events
+  {:name :all-curation-events
+   :kafka-cluster :data-exchange
+   :serialization :json
+   :buffer-size 5
+   :kafka-topic "all-curation-events"
+   :kafka-topic-config {}})
 
 (def gene-validity-complete-topic
   {:name :gene-validity-complete
@@ -394,6 +405,9 @@
             (assoc processing-records-topic
                    :type :kafka-producer-topic
                    :reset-opts {:clear-topic true})
+            :all-curation-events
+            (assoc all-curation-events
+                   :type :kafka-producer-topic)
             :trigger-snapshot
             {:name :trigger-snapshot
              :type :timer-topic

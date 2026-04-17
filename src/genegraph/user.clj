@@ -25,7 +25,8 @@
             [clojure.math :as math]
             [clojure.set :as set]
             [charred.api :as charred]
-            [clojure.walk :as walk])
+            [clojure.walk :as walk]
+            [clj-yaml.core :as yaml])
   (:import [ch.qos.logback.classic Logger Level]
            [org.slf4j LoggerFactory]
            [java.time Instant LocalDate LocalDateTime ZoneOffset]
@@ -2021,4 +2022,38 @@ select ?x where {
          (take-last 1)
          (mapv event/deserialize)
          tap>))
+  )
+
+
+;; Getting link-ml -> my custom schema
+
+(comment
+
+  
+  (do
+    (defn kw->nskw [kw]
+      (case kw
+        :id :id
+        :type :rdf/type
+        :description :dc/description
+        (keyword "cg" (name kw))))
+    
+    (defn linkml->properties [linkml]
+      (reduce ))
+    (defn linkml->classes [linkml]
+      (->> (:classes linkml)
+           (take 5)
+           (mapv
+            (fn [[k v]]
+              [(kw->nskw k)
+               (-> (select-keys v [:description
+                                   :from_schema
+                                   :is_a
+                                   :status])
+                   (assoc :properties (mapv #(kw->nskw (key %)) (:attributes v))))]))))
+    (->
+     (yaml/parse-string
+      (slurp "/users/tristan/code/sepio-linkml/src/sepio_linkml/schema/sepio_classes.yaml"))
+     linkml->classes
+     tap>))
   )

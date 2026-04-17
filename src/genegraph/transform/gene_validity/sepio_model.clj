@@ -237,23 +237,10 @@ select ?gdm where
 (defn add-model-fn [event]
   (let [m (gci-data->sepio-model (:gene-validity/gci-model event)
                                  (params-for-construct event))]
-    (assoc event :gene-validity/model m)))
+    (assoc event :gene-validity/model m))
+  event)
 
 (def add-model
   (interceptor/interceptor
    {:name ::add-model
     :enter (fn [e] (add-model-fn e))}))
-
-(comment
-  (-> (rdf/union (:gene-validity/gci-model @genegraph.user/gdi1)
-                 gdm-sepio-relationships)
-      #_construct-statement
-      construct-family-segregation-evidence
-      rdf/pp-model)
-
-  (-> (rdf/union (:gene-validity/gci-model genegraph.user/gdi1x)
-                 gdm-sepio-relationships)
-      construct-statement
-      construct-family-segregation-evidence
-      rdf/pp-model)
-  )
