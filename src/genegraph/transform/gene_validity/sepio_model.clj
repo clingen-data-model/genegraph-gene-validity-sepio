@@ -237,8 +237,7 @@ select ?gdm where
 (defn add-model-fn [event]
   (let [m (gci-data->sepio-model (:gene-validity/gci-model event)
                                  (params-for-construct event))]
-    (assoc event :gene-validity/model m))
-  event)
+    (assoc event :gene-validity/model m)))
 
 (def add-model
   (interceptor/interceptor

@@ -73,6 +73,11 @@
      (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
            (event-store/event-seq r))))
 
+  (time
+   (event-store/with-event-reader [r source-file]
+     (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
+           (take 1 (event-store/event-seq r)))))
+
   (+ 1 1)
 
   (time
