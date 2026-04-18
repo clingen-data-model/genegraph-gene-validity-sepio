@@ -38,6 +38,7 @@
 
 
   (p/reset (p/init gv/gv-transformer-def))
+  (+ 1 1 )
   ;; Delete all (or some) Genegraph-created topics
   ;; Use this to fix mistakes.
   (with-open [admin-client (kafka-admin/create-admin-client gv/data-exchange)]

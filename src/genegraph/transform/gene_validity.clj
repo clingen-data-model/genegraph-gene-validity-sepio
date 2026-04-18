@@ -146,7 +146,7 @@
     :enter (fn [e]
              (add-iri-fn e))}))
 
-(defn add-publish-actions-fn [event]
+(defn add-publish-actions-fn [{:gene-validity/keys [model json-ld website-event] :as event}]
   (-> event
       (event/publish (-> event
                          (set/rename-keys {::event/iri ::event/key
@@ -407,7 +407,8 @@
                    :reset-opts {:clear-topic true})
             :all-curation-events
             (assoc all-curation-events
-                   :type :kafka-producer-topic)
+                   :type :kafka-producer-topic
+                   :reset-opts {:clear-topic true})
             :trigger-snapshot
             {:name :trigger-snapshot
              :type :timer-topic

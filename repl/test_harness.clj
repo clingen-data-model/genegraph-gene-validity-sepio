@@ -363,8 +363,7 @@ select ?el where {
   (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
                           {:prefix [:events :gene-validity-complete]
                            :return :ref})
-       #_(take 1)
-       
+       (take 1)
        (map deref)
        #_(filter #(test-set (gdm-id %)))
        #_(map #(assoc %
@@ -426,13 +425,16 @@ select ?el where {
        tap>)
   
   (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/json-ld
-                                                       :gene-validity/model}}))
+                                                       :gene-validity/model
+                                                       :gene-validity/website-event}}))
+  
   (+ 1 1)
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (storage/scan db [:outcomes])
          (remove :gene-validity/valid)
          count))
-  
+
+  ;; read json-ld
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (storage/scan db [:outcomes])
          (remove :gene-validity/valid)
@@ -441,6 +443,44 @@ select ?el where {
                    charred/read-json))
          tap>))
 
+  ;; read website json
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         (remove :gene-validity/valid)
+         (take 1)
+         (map #(-> (storage/read db [:transforms :gene-validity/website-event (::event/offset %) 1])
+                   ))
+         tap>))
+
+  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/json-ld
+                                                       :gene-validity/model
+                                                       :gene-validity/website-event}}))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         (map #(assoc %
+                      :gene-validity/website-event
+                      (storage/read db [:transforms :gene-validity/website-event (::event/offset %) 1])))
+         (filter :gene-validity/website-event)
+         (remove #(spec/valid? ::website-events/event-data (:gene-validity/website-event %)))
+         count))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         #_(remove :gene-validity/valid)
+         #_(take 1)
+         (map #(assoc %
+                      :gene-validity/website-event
+                      (storage/read db [:transforms :gene-validity/website-event (::event/offset %) 1])))
+         (filter :gene-validity/website-event)
+         (remove #(spec/valid? ::website-events/event-data (:gene-validity/website-event %)))
+         #_(filter :gene-validity/last-outcome)
+         #_count
+         (take 1)
+         #_tap>
+         (run! #(spec/explain ::website-events/event-data (:gene-validity/website-event %)))))
+
+  ;; read rdf model
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (storage/scan db [:outcomes])
          (remove :gene-validity/valid)
@@ -500,4 +540,53 @@ select ?el where {
      (run! #(p/publish (get-in prod-app-1 [:topics :gene-validity-complete]) %)
            (take 1 (event-store/event-seq r)))))
   
+  )
+
+
+(comment
+  (storage/scan @(get-in app
+                         [:storage :gene-validity-version-store :instance])
+                [:outcomes])
+
+  (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
+                          {:prefix [:events :gene-validity-complete]
+                           :return :ref})
+       (take 1)
+       (map deref)
+       #_(filter #(test-set (gdm-id %)))
+       #_(map #(assoc %
+                      :tap-without-models true
+                      #_#_:pp-model true))
+       (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
+
+  (p/publish
+   (get-in test-app [:topics :transform-topic])
+   (assoc (storage/read @(get-in test-app
+                           [:storage :gene-validity-version-store :instance])
+                  [:events :gene-validity-complete 8159])
+          :tap-without-models true
+          :force-reload #{:gene-validity/json-ld
+                          :gene-validity/model
+                          :gene-validity/website-event}))
+  )
+
+
+;; Structure for dealing with unpublish events with no prior event.
+;; should investigate these and their source, though there are only 10
+(comment
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         #_(remove :gene-validity/valid)
+         #_(take 1)
+         (map #(assoc %
+                      :gene-validity/website-event
+                      (storage/read db [:transforms :gene-validity/website-event (::event/offset %) 1])))
+         (remove :gene-validity/website-event)
+         #_(remove #(spec/valid? ::website-events/event-data (:gene-validity/website-event %)))
+         #_(filter :gene-validity/last-outcome)
+         count
+         #_(take 1)
+         #_tap>
+         #_(run! #(spec/explain ::website-events/event-data (:gene-validity/website-event %)))))
   )

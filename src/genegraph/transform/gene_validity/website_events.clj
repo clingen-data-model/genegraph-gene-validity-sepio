@@ -62,6 +62,7 @@
 (s/def ::internal ::non-empty-string)
 (s/def ::reasons (s/coll-of #{"RECURATION_TIMING"
                               "ADMIN_UPDATE_DISEASE_NAME"
+                              "ADMIN_UPDATE_ERROR_CLASS"
                               "RECURATION_FRAMEWORK"
                               "RECURATION_COMMUNITY_REQUEST"
                               "RECURATION_GENEGRAPH_CALCULATED"
@@ -126,32 +127,19 @@ select ?act where {
    :cg/RecurationErrorAffectingScoreorClassification "RECURATION_ERROR_SCORE_CLASS"
    :cg/RecurationDiscrepancyResolution "RECURATION_DISCREPANCY_RESOLUTION"})
 
-#_(defn curation-reasons [assertion version]
+(defn curation-reasons [assertion {:keys [major minor patch]}]
   (let [gci-reasons (rdf/ld-> assertion [:cg/curationReasons])]
     (if (seq gci-reasons)
       (mapv #(-> % rdf/->kw (genegraph-reason->website-reason "ADMIN_UPDATE_OTHER"))
             gci-reasons)
       (cond
-        (and (= 1 (:major version))
-             (= 0 (:minor version))) ["NEW_CURATION"]
-        (= 0 (:minor version)) ["RECURATION_GENEGRAPH_CALCULATED"]
-        :else ["ADMIN_UPDATE_GENEGRAPH_CALCULATED"]))))
-
-(defn curation-reasons [assertion version]
-  (let [gci-reasons (rdf/ld-> assertion [:cg/curationReasons])
-        [_ major minor] (re-find #"^(\d+)\.(\d+)" version)]
-    (if (seq gci-reasons)
-      (mapv #(-> % rdf/->kw (genegraph-reason->website-reason "ADMIN_UPDATE_OTHER"))
-            gci-reasons)
-      (cond
-        (and (= "1" major)
-             (= "0" minor)) ["NEW_CURATION"]
-        (= "0" minor) ["RECURATION_GENEGRAPH_CALCULATED"]
-        :else ["ADMIN_UPDATE_GENEGRAPH_CALCULATED"]))))
+          (and (= "1" major)
+               (= "0" minor)) ["NEW_CURATION"]
+          (= "0" minor) ["RECURATION_GENEGRAPH_CALCULATED"]
+          :else ["ADMIN_UPDATE_GENEGRAPH_CALCULATED"]))))
 
 (defn affiliation-number [curation-model]
   (if-let [approval (first (activity-query curation-model {:activity :cg/Evaluated}))]
-    #_(re-find #"\d+" (str approval))
     (->> (rdf/ld1-> approval [:cg/contributor])
          str
          (re-find #"\d+$")
@@ -163,26 +151,6 @@ select ?act where {
 select ?x where {
  ?x a :cg/GeneValidityProposition .
 }"))
-
-(defn get-previous-version [event]
-  (storage/read
-   (get-in event [::storage/storage :gene-validity-version-store])
-   [::versioning/prior-version
-    (-> event
-        :gene-validity/model
-        proposition-query
-        first
-        str)]))
-
-(defn get-previous-website-event [event]
-  (storage/read
-   (get-in event [::storage/storage :gene-validity-version-store])
-   [::website-event
-    (-> event
-        :gene-validity/model
-        proposition-query
-        first
-        str)]))
 
 (defn proposition-id [m]
   (some-> (proposition-query m) first str))
@@ -215,7 +183,8 @@ select ?x where { ?x a :cg/Statement . }")
 (defn event->base-event [event]
   (let [curation-model (:gene-validity/model event)
         assertion (first (assertion-query curation-model))
-        version (version-query event)
+        version (:gene-validity/version event)
+        version-str (:gene-validity/version-str event)
         snapshot-id (str (rdf/ld1-> assertion [:cg/GCISnapshot]))]
     {:schema_version "1.0"
      :event_subtype "CURATION"
@@ -238,30 +207,28 @@ select ?x where { ?x a :cg/Statement . }")
                    :genegraph_version_of
                    (:gene-validity/gdm event)}}
      :affiliation {:affiliate_id (affiliation-number curation-model)}
-     :version {:display version
-               :internal version
+     :version {:display version-str
+               :internal version-str
                :reasons (curation-reasons assertion version
                                           #_(:gene-validity/version event))
                :changes (mapv ->website-change (:gene-validity/change-records event))
                :description (rdf/ld1-> assertion [:cg/curationReasonDescription])}}))
 
-;; previous event can be ::storage/miss 
 (defn unpublish-event->website-event [event]
-  (let [previous-event (get-previous-website-event event)]
-    (if (and previous-event (not= ::storage/miss previous-event))
-      (-> previous-event
-          (assoc-in [:workflow :unpublish_date]
-                    (activity-date (:gene-validity/model event)
-                                   :cg/Unpublisher))
-          (assoc :event_type "UNPUBLISH"))
-      nil)))
+  (if-let [previous-event (:gene-validity/previous-website-event event)]
+    (-> previous-event
+        (assoc-in [:workflow :unpublish_date]
+                  (activity-date (:gene-validity/model event)
+                                 :cg/Unpublisher))
+        (assoc :event_type "UNPUBLISH"))
+    nil))
 
 (defn publish-event->website-event [event]
   (assoc (event->base-event event)
          :event_type "PUBLISH"))
 
 (defn event->website-event [event]
-  (if (activity-date (:gene-validity/model event) :cg/Unpublisher)
+  (if (= (:gene-validity/change-type event) :unpublish)
     (unpublish-event->website-event event)
     (publish-event->website-event event)))
 
@@ -272,19 +239,7 @@ select ?x where { ?x a :cg/Statement . }")
    (event->website-event e)))
 
 (defn website-version-interceptor-fn [e]
-  (if (:gene-validity/change-type e)
-    (let [website-event (event->website-event e)]
-      (-> e
-          (assoc :gene-validity/website-event website-event)
-          (event/store
-           :gene-validity-version-store
-           [::website-event
-            (get-in website-event
-                    [:references
-                     :additional_properties
-                     :genegraph_proposition_id])]
-           website-event)))
-    e))
+  (assoc e :gene-validity/website-event (event->website-event e)))
 
 (def website-version-interceptor
   (interceptor/interceptor

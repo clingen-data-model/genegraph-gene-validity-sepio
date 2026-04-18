@@ -152,6 +152,7 @@ select ?role where {
    :gene-validity/gcep
    :gene-validity/secondary-contributor
    :gene-validity/classification
+   :gene-validity/version-str
    :versions
    #_:genegraph.transform.gene-validity.event-recorder/retrieved-from-store])
 

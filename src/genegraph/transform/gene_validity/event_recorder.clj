@@ -169,10 +169,15 @@
       (let [m (storage/read store [:transforms
                                    :gene-validity/model
                                    (::event/offset last-outcome)
-                                   (get-in event [:versions :gene-validity/model])])]
+                                   (get-in event [:versions :gene-validity/model])])
+            w (storage/read store [:transforms
+                                    :gene-validity/website-event
+                                    (::event/offset last-outcome)
+                                    (get-in event [:versions :gene-validity/website-event])])]
         (assoc event
                :gene-validity/previous-model m
-               :gene-validity/last-outcome last-outcome))
+               :gene-validity/last-outcome last-outcome
+               :gene-validity/previous-website-event w))
       event)))
 
 (defn add-previous-version-fn [event]

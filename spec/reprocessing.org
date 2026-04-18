@@ -4,6 +4,9 @@ We will occasionally need to reprocess events in the case of schema changes, bug
 
 It would be convenient if this workflow were incorporated into testing as well, this way the effect of code changes would be tested using the same mechanism used to bring them into effect in production.
 
+* Products
+** Gene Validity GKS
+Fully GKS compliant 
 * Discussion
 
 I want to test components of the system I'm working on, in parallel, across the entire input set, one operation at a time.
@@ -240,18 +243,23 @@ Can I just send it now? Do I need anything else?
 Send it, consider this a stage deployment.
 
 Send data to new (stage) topics.
+** Record accepted failures
+Some events will not pass validation due to known issues. These should not come up time and time again on re-validation.
 
-
-
-** Errors
+These events failing validation should be considered when extending tests.
+** Minor Errors
+These are errors affecting a relatively small number of curations. Probably these will be annotated as accepted failures, but this should be noted
 *** Disconnected evidence lines
 Segregations with no scored variants, but individuals noted in a segregation, seem to generate disconnected segregation evidence lines.
 
 TNNT2 -- HCM -- unclear
-
+*** Unpublish events without prior event
+Results in nil website message event (should not send) -- there are only 10 of these, however
 ** Collection types in JSON-LD frame
 Some types in JSON-LD should be expected to be collections, and should be noted as such.
 *** demonstrates is colleciton type
+
+
 
 ** DONE Remove legacy website ID
 

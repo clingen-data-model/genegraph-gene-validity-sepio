@@ -64,7 +64,8 @@ construct {
                                        :assertionRoot (rdf/resource assertion-root)
                                        :snapshotIRI (first (assertion-iri model))
                                        :version version-str
-                                       :sequence sequence}))))
+                                       :sequence sequence})
+           :gene-validity/version-str version-str)))
 
 
 (defn first-curation? [event]
@@ -150,7 +151,7 @@ construct {
           add-change-type
           add-version-fn
           add-versioned-model)
-      event)
+      (assoc event :gene-validity/change-type :unpublish))
     (catch Exception e
       (tap> (abbrev/abbreviate event))
       (log/warn :fn ::calculate-version
