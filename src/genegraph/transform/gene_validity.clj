@@ -147,24 +147,24 @@
              (add-iri-fn e))}))
 
 (defn add-publish-actions-fn [{:gene-validity/keys [model json-ld website-event] :as event}]
-  (-> event
-      (event/publish (-> event
-                         (set/rename-keys {::event/iri ::event/key
-                                           :gene-validity/model ::event/data})
-                         (select-keys [::event/key ::event/data])
-                         (assoc ::event/topic :gene-validity-sepio)))
-      (event/publish (-> event
-                         (set/rename-keys {::event/iri ::event/key
-                                           :gene-validity/json-ld ::event/data})
-                         (select-keys [::event/key ::event/data])
-                         (assoc ::event/topic :gene-validity-sepio-jsonld)))
-      (event/publish (-> event
-                         (set/rename-keys {::event/iri ::event/key
-                                           :gene-validity/website-event ::event/data})
-                         (select-keys [::event/key ::event/data])
-                         (assoc ::event/topic :all-curation-events)))
-      (event/publish {::event/data (abbrev/abbreviate event)
-                      ::event/topic :processing-records-topic})))
+  (cond-> event
+    model (event/publish (-> event
+                             (set/rename-keys {::event/iri ::event/key
+                                               :gene-validity/model ::event/data})
+                             (select-keys [::event/key ::event/data])
+                             (assoc ::event/topic :gene-validity-sepio)))
+    json-ld (event/publish (-> event
+                               (set/rename-keys {::event/iri ::event/key
+                                                 :gene-validity/json-ld ::event/data})
+                               (select-keys [::event/key ::event/data])
+                               (assoc ::event/topic :gene-validity-sepio-jsonld)))
+    website-event (event/publish (-> event
+                                     (set/rename-keys {::event/iri ::event/key
+                                                       :gene-validity/website-event ::event/data})
+                                     (select-keys [::event/key ::event/data])
+                                     (assoc ::event/topic :all-curation-events)))
+    true (event/publish {::event/data (abbrev/abbreviate event)
+                    ::event/topic :processing-records-topic})))
 
 (def add-publish-actions
   (interceptor/interceptor

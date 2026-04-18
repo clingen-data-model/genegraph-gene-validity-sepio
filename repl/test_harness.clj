@@ -87,6 +87,13 @@
         (take 1)
         (map deref)
         tap>))
+
+  (time
+   (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
+                           {:prefix [:events :gene-validity-complete]
+                            :return :ref})
+        count))
+  
   )
 
 (def prop-query
@@ -589,4 +596,12 @@ select ?el where {
          #_(take 1)
          #_tap>
          #_(run! #(spec/explain ::website-events/event-data (:gene-validity/website-event %)))))
+  
+
+  ;; 78 after initial load
+  ;; 8 after reprocessing ...
+
+  ;; this is suspicious and needs investigating; should check after production deployment
+  ;; 
+  
   )
