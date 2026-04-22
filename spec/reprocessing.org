@@ -243,12 +243,18 @@ Can I just send it now? Do I need anything else?
 Send it, consider this a stage deployment.
 
 Send data to new (stage) topics.
+
+** Duplicate descriptions
+See GDI1--test for others
+
 ** Record accepted failures
 Some events will not pass validation due to known issues. These should not come up time and time again on re-validation.
 
 These events failing validation should be considered when extending tests.
 ** Minor Errors
 These are errors affecting a relatively small number of curations. Probably these will be annotated as accepted failures, but this should be noted
+
+
 *** Disconnected evidence lines
 Segregations with no scored variants, but individuals noted in a segregation, seem to generate disconnected segregation evidence lines.
 

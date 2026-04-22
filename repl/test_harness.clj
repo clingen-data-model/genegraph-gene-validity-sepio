@@ -331,14 +331,18 @@ select ?el where {
          #_(map #(q (:gene-validity/model %)))
          count))
   
-  (time
+  (with-open [w (io/writer "/users/tristan/Desktop/gdi1.json")]
    (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
      (->> (snapshot/latest-records store)
           (filter #(= (:gene-validity/gene %)
-                      "https://identifiers.org/hgnc:17601"))
+                      "https://identifiers.org/hgnc:4226"))
           (map #(outcome->json % store))
-          tap>)))
+          (map ::json)
+          (run! #(json/write % w :indent :true)))))
 
+  (println (json/write-str {:a "aaa" :b "bbb"} :indent true))
+
+  (+ 1 1)
   
   (->> (gdm-id->events (second test-set) test-app)
        (take 1)

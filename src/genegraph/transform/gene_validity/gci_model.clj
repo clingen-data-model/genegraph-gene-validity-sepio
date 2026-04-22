@@ -362,34 +362,6 @@
       ByteArrayInputStream.
       (rdf/read-rdf :json-ld)))
 
-#_(defn existing-model [{::event/keys [offset]
-                       :keys [gci-model-version]
-                       :as event}]
-  (when (and (not (get-in event [:force-reload :gene-validity/gci-model]))
-             offset
-             gci-model-version
-             (get-in event [::storage/storage :gene-validity-version-store]))
-    (let [result (storage/read
-                  (get-in event [::storage/storage :gene-validity-version-store])
-                  [:transforms :gene-validity/gci-model offset gci-model-version])]
-      (when-not (= ::storage/miss result) result))))
-
-#_(defn add-gci-model-fn [{::event/keys [offset]
-                         :keys [gci-model-version]
-                         :as event}]
-  (if-let [m (existing-model event)]
-    (assoc event
-           :gene-validity/gci-model m
-           :gene-validity/cached-gci-model true)
-    (let [m1 (gci-model (::event/data event))]
-      (-> event
-          (assoc 
-           :gene-validity/gci-model m1
-           :gene-validity/cached-gci-model false)
-          (event/store :gene-validity-version-store
-                       [:transforms :gene-validity/gci-model offset gci-model-version]
-                       m1)))))
-
 ;; Only load if not preloaded by event recorder
 (defn add-gci-model-fn [event]
   (if-not (:gene-validity/gci-model event)

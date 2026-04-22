@@ -20,6 +20,7 @@
 	"predicate": {"@type": "@vocab"},
 	"qualifier": {"@type": "@vocab"},
 	"object": {"@type": "@vocab"},
+	"zygosity": {"@type": "@vocab"},
 	"phenotypes": {"@type": "@id"},
 	"activityType": {"@type": "@vocab"},
 	"contributor": {"@type": "@id"},
