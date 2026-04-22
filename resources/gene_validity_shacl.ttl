@@ -3,100 +3,127 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc: <http://purl.org/dc/terms/> .
+
 
 cg:StatementShape
     a sh:NodeShape ;
     sh:targetClass cg:Statement ;
+    sh:property cg:StatementClassificationShape ;
+    sh:property cg:StatementHasEvidenceLinesShape ;
+    sh:property cg:StatementPropositionShape ;
+    sh:property cg:StatementEvaluatedContributionShape ;
+    sh:property cg:StatementDescriptionShape ;
+    sh:property cg:StatementSubmittedContributionShape .
 
-    sh:property [
-        sh:path cg:classification ;
-        sh:minCount 1 ;
-        sh:message "cg:Statement must have a cg:classification"
+cg:StatementDescriptionShape
+    a sh:PropertyShape ;
+    sh:path dc:description ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:message "cg:Statement must have one dc:description" .
+
+cg:StatementClassificationShape
+    a sh:PropertyShape ;
+    sh:path cg:classification ;
+    sh:minCount 1 ;
+    sh:message "cg:Statement must have a cg:classification" .
+
+cg:StatementHasEvidenceLinesShape
+    a sh:PropertyShape ;
+    sh:path cg:hasEvidenceLines ;
+    sh:minCount 1 ;
+    sh:message "cg:Statement must have at least one cg:hasEvidenceLines" .
+
+cg:StatementPropositionShape
+    a sh:PropertyShape ;
+    sh:path cg:proposition ;
+    sh:minCount 1 ;
+    sh:qualifiedValueShape [ sh:class cg:GeneValidityProposition ] ;
+    sh:qualifiedMinCount 1 ;
+    sh:message "cg:Statement must have a cg:proposition of type cg:GeneValidityProposition" .
+
+cg:StatementEvaluatedContributionShape
+    a sh:PropertyShape ;
+    sh:path cg:contributions ;
+    sh:qualifiedValueShape [
+        sh:property cg:EvaluatedActivityTypeShape
     ] ;
+    sh:qualifiedMinCount 1 ;
+    sh:message "cg:Statement must have a contribution with cg:activityType cg:Evaluated" .
 
-    sh:property [
-        sh:path cg:hasEvidenceLines ;
-        sh:minCount 1 ;
-        sh:message "cg:Statement must have at least one cg:hasEvidenceLines"
+cg:EvaluatedActivityTypeShape
+    a sh:PropertyShape ;
+    sh:path cg:activityType ;
+    sh:hasValue cg:Evaluated .
+
+cg:StatementSubmittedContributionShape
+    a sh:PropertyShape ;
+    sh:path cg:contributions ;
+    sh:qualifiedValueShape [
+        sh:property cg:SubmittedActivityTypeShape
     ] ;
+    sh:qualifiedMinCount 1 ;
+    sh:message "cg:Statement must have a contribution with cg:activityType cg:Submitted" .
 
-    sh:property [
-        sh:path cg:proposition ;
-        sh:minCount 1 ;
-        sh:qualifiedValueShape [ sh:class cg:GeneValidityProposition ] ;
-        sh:qualifiedMinCount 1 ;
-        sh:message "cg:Statement must have a cg:proposition of type cg:GeneValidityProposition"
-    ] ;
-
-    sh:property [
-        sh:path cg:contributions ;
-        sh:qualifiedValueShape [
-            sh:property [
-                sh:path cg:activityType ;
-                sh:hasValue cg:Evaluated
-            ]
-        ] ;
-        sh:qualifiedMinCount 1 ;
-        sh:message "cg:Statement must have a contribution with cg:activityType cg:Evaluated"
-    ] ;
-
-    sh:property [
-        sh:path cg:contributions ;
-        sh:qualifiedValueShape [
-            sh:property [
-                sh:path cg:activityType ;
-                sh:hasValue cg:Submitted
-            ]
-        ] ;
-        sh:qualifiedMinCount 1 ;
-        sh:message "cg:Statement must have a contribution with cg:activityType cg:Submitted"
-    ] .
+cg:SubmittedActivityTypeShape
+    a sh:PropertyShape ;
+    sh:path cg:activityType ;
+    sh:hasValue cg:Submitted .
 
 
 cg:EvidenceLineConnectedShape
     a sh:NodeShape ;
     sh:targetClass cg:EvidenceLine ;
-    sh:property [
-        sh:path [
-            sh:zeroOrMorePath [
-                sh:inversePath [
-                    sh:alternativePath (
-                        cg:hasEvidenceLines
-                        cg:hasEvidenceItems
-                        cg:evidence
-                    )
-                ]
+    sh:property cg:EvidenceLineReachabilityShape .
+
+cg:EvidenceLineReachabilityShape
+    a sh:PropertyShape ;
+    sh:path [
+        sh:zeroOrMorePath [
+            sh:inversePath [
+                sh:alternativePath (
+                    cg:hasEvidenceLines
+                    cg:hasEvidenceItems
+                    cg:evidence
+                )
             ]
-        ] ;
-        sh:qualifiedValueShape [ sh:class cg:Statement ] ;
-        sh:qualifiedMinCount 1 ;
-        sh:message "cg:EvidenceLine must be reachable from a cg:Statement via (cg:hasEvidenceLines|cg:hasEvidenceItems|cg:evidence)*"
-    ] .
+        ]
+    ] ;
+    sh:qualifiedValueShape [ sh:class cg:Statement ] ;
+    sh:qualifiedMinCount 1 ;
+    sh:message "cg:EvidenceLine must be reachable from a cg:Statement via (cg:hasEvidenceLines|cg:hasEvidenceItems|cg:evidence)*" .
 
 
 cg:NoObsoleteHasEvidenceLineShape
     a sh:NodeShape ;
     sh:targetSubjectsOf cg:hasEvidenceLine ;
-    sh:property [
-        sh:path cg:hasEvidenceLine ;
-        sh:maxCount 0 ;
-        sh:message "cg:hasEvidenceLine is obsolete; use cg:hasEvidenceLines"
-    ] .
+    sh:property cg:NoHasEvidenceLinePropertyShape .
+
+cg:NoHasEvidenceLinePropertyShape
+    a sh:PropertyShape ;
+    sh:path cg:hasEvidenceLine ;
+    sh:maxCount 0 ;
+    sh:message "cg:hasEvidenceLine is obsolete; use cg:hasEvidenceLines" .
 
 cg:NoObsoleteHasEvidenceItemShape
     a sh:NodeShape ;
     sh:targetSubjectsOf cg:hasEvidenceItem ;
-    sh:property [
-        sh:path cg:hasEvidenceItem ;
-        sh:maxCount 0 ;
-        sh:message "cg:hasEvidenceItem is obsolete; use cg:hasEvidenceItems"
-    ] .
+    sh:property cg:NoHasEvidenceItemPropertyShape .
+
+cg:NoHasEvidenceItemPropertyShape
+    a sh:PropertyShape ;
+    sh:path cg:hasEvidenceItem ;
+    sh:maxCount 0 ;
+    sh:message "cg:hasEvidenceItem is obsolete; use cg:hasEvidenceItems" .
 
 cg:NoObsoleteEvidenceShape
     a sh:NodeShape ;
     sh:targetSubjectsOf cg:evidence ;
-    sh:property [
-        sh:path cg:evidence ;
-        sh:maxCount 0 ;
-        sh:message "cg:evidence is obsolete; use cg:hasEvidenceLines or cg:hasEvidenceItems"
-    ] .
+    sh:property cg:NoEvidencePropertyShape .
+
+cg:NoEvidencePropertyShape
+    a sh:PropertyShape ;
+    sh:path cg:evidence ;
+    sh:maxCount 0 ;
+    sh:message "cg:evidence is obsolete; use cg:hasEvidenceLines or cg:hasEvidenceItems" .

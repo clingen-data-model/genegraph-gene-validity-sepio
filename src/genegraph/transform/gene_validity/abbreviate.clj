@@ -153,6 +153,7 @@ select ?role where {
    :gene-validity/secondary-contributor
    :gene-validity/classification
    :gene-validity/version-str
+   :gene-validity/shacl-report
    :versions
    #_:genegraph.transform.gene-validity.event-recorder/retrieved-from-store])
 

@@ -609,3 +609,28 @@ select ?el where {
   ;; 
   
   )
+
+;; testing new validation on GDI1
+(comment
+  (with-open [w (io/writer "/users/tristan/Desktop/gdi1.json")]
+    (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+      (->> (snapshot/latest-records store)
+           (filter #(= (:gene-validity/gene %)
+                       "https://identifiers.org/hgnc:4226"))
+           (map #(outcome->json % store))
+           (map ::json)
+           (run! #(json/write % w :indent :true)))))
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         (filter #(= (:gene-validity/gene %)
+                     "https://identifiers.org/hgnc:4226"))
+         (map #(outcome->json % store))
+         (map ::json)
+         tap>))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        xform-topic (get-in test-app [:topics :transform-topic])
+        evt (storage/read db [:events :gene-validity-complete 10957])]
+    (p/publish xform-topic (assoc evt :tap-abbrev true)))
+  )

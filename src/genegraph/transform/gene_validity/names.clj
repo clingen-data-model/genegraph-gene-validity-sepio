@@ -28,7 +28,8 @@
  "cvscv" "https://identifiers.org/clinvar.submission:"
  "oboinowl" "http://www.geneontology.org/formats/oboInOwl#"
  "efo" "http://www.ebi.ac.uk/efo/"
- "genegraph" "https://genegraph.clingen.app/"})
+ "genegraph" "https://genegraph.clingen.app/"
+ "shacl" "http://www.w3.org/ns/shacl#"})
 
 (add-keyword-mappings
  {:bfo/realizes "http://purl.obolibrary.org/obo/BFO_0000055"

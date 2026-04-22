@@ -1,7 +1,8 @@
 (ns genegraph.transform.gene-validity.validation
   (:require [genegraph.framework.storage.rdf :as rdf]
             [genegraph.framework.event :as event]
-            [io.pedestal.interceptor :as interceptor]))
+            [io.pedestal.interceptor :as interceptor]
+            [clojure.java.io :as io]))
 
 (defn publish? [event]
   (= :cg/Submitted (:cg/activityType event)))
@@ -10,69 +11,13 @@
   (= :cg/Unpublished (:cg/activityType event)))
 
 (def tests
-  [{:name :no-obsolete-evidence-predicate
-    :comment "May be able to remove."
-    :check-fn (fn [{:gene-validity/keys [model]}]
-                (empty? ((rdf/create-query
-                          "
-select ?s where 
-{ ?s ( :cg/hasEvidenceLine | :cg/hasEvidenceItem | :cg/evidence ) ?o }"
-                          ) model)))}
-   {:name :no-obsolete-evidence-predicate
-    :comment "May be able to remove."
-    :check-fn (fn [{:gene-validity/keys [model]}]
-                (empty? ((rdf/create-query
-                          "
-select ?s where 
-{ ?s ( :cg/hasEvidenceLine | :cg/hasEvidenceItem | :cg/evidence ) ?o }"
-                          ) model)))}
-   {:name :has-statement
+  [{:name :has-statement
     :check-fn (fn [{:gene-validity/keys [model]}]
                 (= 1 (count ((rdf/create-query "select ?x where { ?x a :cg/Statement }") model))))}
    {:name :has-kafka-iri
     :check-fn (fn [event] (seq (::event/iri event)))}
    {:name :has-gdm
     :check-fn :gene-validity/gdm}
-   #_{:name :has-legacy-website-id
-      :when publish?
-      :check-fn (fn [{:gene-validity/keys [model]}]
-                  (seq ((rdf/create-query
-                         "select ?id where { ?a :cg/websiteLegacyID ?id }") model)))}
-   {:name :has-evaluated-contribution
-    :when publish?
-    :check-fn (fn [{:gene-validity/keys [model]}]
-                (seq ((rdf/create-query
-                       "select ?c where { ?c :cg/activityType :cg/Evaluated }") model)))}
-   {:name :has-submitted-contribution
-    :when publish?
-    :check-fn (fn [{:gene-validity/keys [model]}]
-                (seq ((rdf/create-query
-                       "select ?c where { ?c :cg/activityType :cg/Submitted }") model)))}
-   {:name :no-disconnected-evidence-lines
-    :when publish?
-    :check-fn (fn [{:gene-validity/keys [model]}]
-                (let [q (rdf/create-query "
-select ?el where {
-  ?el a :cg/EvidenceLine .
-  ?a a :cg/Statement .
-  filter not exists { ?a (:cg/hasEvidenceLines|:cg/hasEvidenceItems|:cg/evidence)* ?el . }
-}")]
-                  (empty? (q model))))}
-   {:name :has-evidence-lines
-    :when publish?
-    :check-fn (fn [{:gene-validity/keys [model]}]
-                (seq ((rdf/create-query
-                       "select ?el where { ?a a :cg/Statement ; :cg/hasEvidenceLines ?el }") model)))}
-   {:name :has-classification
-    :when publish?
-    :check-fn (fn [{:gene-validity/keys [model]}]
-                (seq ((rdf/create-query
-                       "select ?c where { ?a a :cg/Statement ; :cg/classification ?c }") model)))}
-   {:name :has-proposition
-    :when publish?
-    :check-fn (fn [{:gene-validity/keys [model]}]
-                (seq ((rdf/create-query
-                       "select ?p where { ?p a :cg/GeneValidityProposition }") model)))}
    {:name :unpublish-has-date
     :when unpublish?
     :check-fn (fn [{:gene-validity/keys [model]}]
@@ -83,6 +28,10 @@ select ?el where {
                       (seq ((rdf/create-query
                              "select ?c where { ?c :cg/activityType :cg/Unpublished ; :cg/date ?d }") model)))))}])
 
+(def shacl-shapes
+  (with-open [is (-> "gene_validity_shacl.ttl" io/resource io/input-stream)]
+    (-> is (rdf/read-rdf ::rdf/turtle) rdf/model->shapes)))
+
 (defn validate-fn [event]
   (let [results (reduce
                  (fn [res {:keys [name when check-fn]}]
@@ -92,11 +41,16 @@ select ?el where {
                        (update res tr conj name))))
                  {:pass []
                   :fail []}
-                 tests)]
+                 tests)
+        shacl-report (if (publish? event)
+                       (rdf/validate (:gene-validity/model event) shacl-shapes)
+                       {:conforms? true})] ; consider unpublish at some point
     (assoc event
+           :gene-validity/shacl-report shacl-report
            :gene-validity/passed-tests (:pass results)
            :gene-validity/failed-tests (:fail results)
-           :gene-validity/valid (empty? (:fail results)))))
+           :gene-validity/valid (and (empty? (:fail results))
+                                     (:conforms? shacl-report)))))
 
 (def validate
   (interceptor/interceptor
