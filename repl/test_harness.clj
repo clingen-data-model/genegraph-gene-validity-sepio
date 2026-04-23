@@ -6,6 +6,7 @@
             [genegraph.transform.gene-validity.website-events :as website-events]
             [genegraph.transform.gene-validity.event-recorder :as recorder]
             [genegraph.transform.gene-validity.abbreviate :as abbrev]
+            [genegraph.transform.gene-validity.validation :as validation]
             [genegraph.framework.app :as app]
             [genegraph.framework.event :as event]
             [genegraph.framework.event.store :as event-store]
@@ -647,3 +648,67 @@ select ?el where {
                                                        :gene-validity/model
                                                        :gene-validity/website-event}}))
   )
+
+
+(comment
+  ;; Github #7 Age type and age unit
+  
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?p where { ?p a :cg/Proband } ")]
+    (->> (snapshot/latest-records store)
+         #_(take 100)
+         (map #(outcome->model % store))
+         (map (fn [e]
+                (->> (q (:gene-validity/model e))
+                     (map #(rdf/ld1-> % [:cg/ageUnit]))
+                     set)))
+         (reduce set/union)
+         tap>))
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?p where { ?p a :cg/Proband } ")]
+    (->> (snapshot/latest-records store)
+         #_(take 1)
+         (map #(outcome->model % store))
+         (map validation/validate-fn)
+         (remove #(get-in % [:gene-validity/shacl-report :conforms?]))
+         (map #(dissoc % :gene-validity/model))
+         (take 1)
+         tap>))
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?p where { ?p a :cg/Proband } ")]
+    (->> (snapshot/latest-records store)
+         #_(take 1)
+         (map #(outcome->model % store))
+         (map validation/validate-fn)
+         (remove #(get-in % [:gene-validity/shacl-report :conforms?]))
+         (mapv #(dissoc % :gene-validity/model))
+         #_count
+         #_(take 1)
+         #_(run! #(rdf/pp-model (:gene-validity/model %)))
+         tap>))
+
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        xform-topic (get-in test-app [:topics :transform-topic])
+        evt (storage/read db [:events :gene-validity-complete 10329])]
+    (p/publish xform-topic
+               (assoc evt
+                      :tap-without-models true
+                      :pp-model true
+                      :pp-gci-model true
+                      :force-reload #{:gene-validity/gci-model
+                                      :gene-validity/json-ld
+                                      :gene-validity/model
+                                      :gene-validity/website-event})))
+
+  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/gci-model
+                                                       :gene-validity/json-ld
+                                                       :gene-validity/model
+                                                       :gene-validity/website-event}}))
+  
+  )
+
+
+(str/trim "\n")

@@ -4,8 +4,11 @@
             [io.pedestal.interceptor :as interceptor]
             [clojure.java.io :as io]))
 
-(defn publish? [event]
+#_(defn publish? [event]
   (= :cg/Submitted (:cg/activityType event)))
+
+(defn publish? [event]
+  (get (:gene-validity/activity event) :cg/Submitted))
 
 (defn unpublish? [event]
   (= :cg/Unpublished (:cg/activityType event)))
@@ -44,7 +47,8 @@
                  tests)
         shacl-report (if (publish? event)
                        (rdf/validate (:gene-validity/model event) shacl-shapes)
-                       {:conforms? true})] ; consider unpublish at some point
+                       {:conforms? true
+                        :notes "no shacl on unpublish"})] ; consider unpublish at some point
     (assoc event
            :gene-validity/shacl-report shacl-report
            :gene-validity/passed-tests (:pass results)

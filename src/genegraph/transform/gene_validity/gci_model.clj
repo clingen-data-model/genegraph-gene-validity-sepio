@@ -312,7 +312,7 @@
     (dissoc m :provisionalClassifications)
     m))
 
-(defn remove-keys-when-empty
+#_(defn remove-keys-when-empty
   "When element is a map, removes any keys with key names from 'keys' vector that
   has an empty value." 
   [element keys]
@@ -324,6 +324,21 @@
                            (apply dissoc x))
                       x))
             element))
+
+(defn remove-keys-when-empty
+  "When element is a map, removes any keys with key names from 'keys' vector that
+  has an empty value." 
+  [x keys]
+  (if (map? x)
+    (->> (select-keys x keys)
+         (reduce (fn [coll [k v]]
+                   (if (or (empty? v)
+                           (and (string? v) (empty? (s/trim v))))
+                     (conj coll k)
+                     coll))
+                 [])
+         (apply dissoc x))
+    x))
 
 (defn remove-extra-provisional-classifications [data]
   (update-in data [:resourceParent :gdm] dissoc :provisionalClassifications))
@@ -341,7 +356,12 @@
                                            :normalExpression
                                            :scores
                                            :carId
-                                           :clinvarVariantId]))
+                                           :clinvarVariantId
+                                           :ageUnit
+                                           :ageType
+                                           :methodsOfDetection
+                                           :caseDetectionMethod
+                                           :controlDetectionMethod]))
              data)))
 
 (defn fix-gdm-identifiers [gdm-json]
@@ -378,5 +398,3 @@
   (interceptor/interceptor
    {:name ::add-gci-model
     :enter (fn [e] (add-gci-model-fn e))}))
-
-

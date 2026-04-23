@@ -336,4 +336,50 @@ Bring in some of the relevant code for snapshot generation.
 
 ** API View
 
+** Proband evidence showing up in recent curations
 
+May be matching on probands not rescored in later SOPs, but still lingering in evidence structure
+
+PSEN2 offset 13145
+
+TNNT2 offset 10329 -- this one seems legit, was republished with updated scores; still doesn't show up on website.
+
+** Github issues
+
+Identifying ranges of acceptable values and validating them will help with many of these.
+
+I have some enumerations listed in the documentation--need to work them into the SHACL validation
+
+*** Zygosity #12
+
+Github #12 Inconsistently attached to Proband vs Variant Observation
+
+I feel like I slapped this together without much thought. This deserves a moment of thinking--results in differences between Proband.
+
+Let's plan on doing a time-boxed workup of this one, but may be hard to resolve immediately.
+
+*** Freetext w \n instead of null #11
+
+May be something I can handle in preprocessing. Could be an easy fix.
+
+
+*** Schema #10
+
+Add domain and range to schema (may be easy)
+
+detectionType (Cohort vs Proband)
+
+Mapping between Genegraph and GCI/Website (can describe ingest from GCI in broad terms, going to ignore the website)
+
+*** Values and column mapping errors in Sex field #9
+
+OtherVariantDetectionMethod appears in sex
+UnknownEthnicity appears in sex
+
+*** previousTesting  and previousTestingDescription #8
+
+Not sure about need to explore in GCI
+
+*** ageType and ageUnit fields #7
+
+Seems like this should be another thing we can test against known valuests

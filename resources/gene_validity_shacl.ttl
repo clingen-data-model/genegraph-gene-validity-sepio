@@ -127,3 +127,17 @@ cg:NoEvidencePropertyShape
     sh:path cg:evidence ;
     sh:maxCount 0 ;
     sh:message "cg:evidence is obsolete; use cg:hasEvidenceLines or cg:hasEvidenceItems" .
+
+
+cg:ProbandShape
+    a sh:NodeShape ;
+    sh:targetClass cg:Proband ;
+    sh:property cg:ProbandAgeUnitShape .
+
+cg:ProbandAgeUnitShape
+    a sh:PropertyShape ;
+    sh:path cg:ageUnit ;
+    sh:maxCount 1 ;
+    sh:in ( cg:Years cg:Months cg:WeeksGestation cg:Days cg:Weeks cg:Hours ) ;
+    sh:message "cg:Proband cg:ageUnit must be one of cg:Years, cg:Months, cg:WeeksGestation, cg:Days, cg:Weeks, or cg:Hours" .
+
