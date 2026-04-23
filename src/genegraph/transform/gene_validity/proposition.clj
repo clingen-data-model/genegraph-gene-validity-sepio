@@ -7,7 +7,7 @@
 
 (id/register-type {:type :cg/GeneValidityProposition
                    :defining-attributes
-                   [:cg/subject :cg/object :cg/qualifier :cg/predicate]})
+                   [:cg/subjectGene :cg/objectCondition :cg/qualifierModeOfInheritance :cg/predicate]})
 
 (def prop-query
   (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }"))
@@ -15,9 +15,9 @@
 (defn proposition-id [model]
   (when-let [prop (first (prop-query model))]
     (->{:type :cg/GeneValidityProposition
-        :cg/subject (str (rdf/ld1-> prop [:cg/subject]))
-        :cg/object (str (rdf/ld1-> prop [:cg/object]))
-        :cg/qualifier (str (rdf/ld1-> prop [:cg/qualifier]))
+        :cg/subjectGene (str (rdf/ld1-> prop [:cg/subjectGene]))
+        :cg/objectCondition (str (rdf/ld1-> prop [:cg/objectCondition]))
+        :cg/qualifierModeOfInheritance (str (rdf/ld1-> prop [:cg/qualifierModeOfInheritance]))
         :cg/predicate (str (rdf/ld1-> prop [:cg/predicate]))}
        id/iri
        rdf/resource)))

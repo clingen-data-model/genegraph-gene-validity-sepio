@@ -37,12 +37,12 @@ select ?o where { ?o a :cg/Statement . }")]
     :query "select ?o where { ?a :cg/classification ?o }"
     :required true}
    {:change-type :cg/diseaseIDChange
-    :query "select ?o where { ?a a :cg/GeneValidityProposition ; :cg/object ?o }"
+    :query "select ?o where { ?a a :cg/GeneValidityProposition ; :cg/objectCondition ?o }"
     :required true}
    {:change-type :cg/MOIChange
     :query "select ?o where {
  ?a a :cg/GeneValidityProposition ;
- :cg/qualifier ?o }"
+ :cg/qualifierModeOfInheritance ?o }"
     :required true}
    {:change-type :cg/expertPanelChange
     :query "select ?o where {

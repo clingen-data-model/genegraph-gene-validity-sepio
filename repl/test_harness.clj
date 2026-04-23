@@ -348,7 +348,7 @@ select ?el where {
   (->> (gdm-id->events (second test-set) test-app)
        (take 1)
        #_(map #(assoc % :tap-abbrev true :pp-model true))
-       (map #(assoc % :tap-without-models true))
+       (map #(assoc % :tap-json true))
        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
 
   (->> (gdm-id->outcomes (second test-set) test-app)
@@ -696,8 +696,9 @@ select ?el where {
     (p/publish xform-topic
                (assoc evt
                       :tap-without-models true
+                      :tap-json
                       :pp-model true
-                      :pp-gci-model true
+                      #_#_:pp-gci-model true
                       :force-reload #{:gene-validity/gci-model
                                       :gene-validity/json-ld
                                       :gene-validity/model

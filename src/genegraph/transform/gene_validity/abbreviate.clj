@@ -68,9 +68,9 @@
 
 (def model-attribute-queries
   [[:gene-validity/gene
-    "select ?g where { ?s a :cg/GeneValidityProposition ; :cg/subject ?g }"]
+    "select ?g where { ?s a :cg/GeneValidityProposition ; :cg/subjectGene ?g }"]
    [:gene-validity/disease
-    "select ?g where { ?s a :cg/GeneValidityProposition ; :cg/object ?g }"]
+    "select ?g where { ?s a :cg/GeneValidityProposition ; :cg/objectCondition ?g }"]
    [:gene-validity/gcep
     "select ?gcep where 
 { ?s a :cg/Statement ; :cg/contributions ?contrib .

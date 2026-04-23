@@ -5,11 +5,11 @@ prefix hp: <http://purl.obolibrary.org/obo/HP_>
 
 construct 
 {
-  ?gdm a cg:GeneValidityProposition ; 
-  cg:subject ?hgnc ;
-  cg:object ?disease ;
+  ?gdm a cg:GeneValidityProposition ;
+  cg:subjectGene ?hgnc ;
+  cg:objectCondition ?disease ;
   cg:predicate cg:GeneValidityPredicate ;
-  cg:qualifier ?moi .
+  cg:qualifierModeOfInheritance ?moi .
 }
 where
 {
