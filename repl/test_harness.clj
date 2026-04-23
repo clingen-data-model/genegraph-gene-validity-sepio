@@ -435,7 +435,8 @@ select ?el where {
        (mapv #(-> % deref charred/read-json))
        tap>)
   
-  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/json-ld
+  (time (gv/reprocess-events test-app {:force-reload #{
+                                                       :gene-validity/json-ld
                                                        :gene-validity/model
                                                        :gene-validity/website-event}}))
   
@@ -632,5 +633,17 @@ select ?el where {
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
         xform-topic (get-in test-app [:topics :transform-topic])
         evt (storage/read db [:events :gene-validity-complete 10957])]
-    (p/publish xform-topic (assoc evt :tap-abbrev true)))
+    (p/publish xform-topic
+               (assoc evt
+                      :tap-without-models true
+                      :pp-gci-model true
+                      :force-reload #{:gene-validity/gci-model
+                                      :gene-validity/json-ld
+                                      :gene-validity/model
+                                      :gene-validity/website-event})))
+
+  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/gci-model
+                                                       :gene-validity/json-ld
+                                                       :gene-validity/model
+                                                       :gene-validity/website-event}}))
   )

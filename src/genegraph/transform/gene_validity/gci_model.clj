@@ -307,6 +307,11 @@
 (defn clear-associated-snapshots [m]
   (if (map? m) (dissoc m :associatedClassificationSnapshots) m))
 
+(defn clear-extra-provisional-classifications [m]
+  (if (and (map? m) (= "gdm" (:item_type m)))
+    (dissoc m :provisionalClassifications)
+    m))
+
 (defn remove-keys-when-empty
   "When element is a map, removes any keys with key names from 'keys' vector that
   has an empty value." 
@@ -331,6 +336,7 @@
                   clear-associated-snapshots
                   fix-hpo-ids
                   expand-affiliation-to-iri
+                  clear-extra-provisional-classifications
                   (remove-keys-when-empty [:geneWithSameFunctionSameDisease
                                            :normalExpression
                                            :scores

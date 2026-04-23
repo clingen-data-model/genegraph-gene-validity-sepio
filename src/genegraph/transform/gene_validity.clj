@@ -233,6 +233,7 @@
 
 (defn tap-interceptor-fn [e]
   (when (:pp-model e) (rdf/pp-model (:gene-validity/model e)))
+  (when (:pp-gci-model e) (rdf/pp-model (:gene-validity/gci-model e)))
   (when (:tap-json e) (-> e
                           :gene-validity/json-ld
                           charred/read-json
