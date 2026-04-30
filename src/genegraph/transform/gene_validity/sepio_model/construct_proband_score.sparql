@@ -23,6 +23,7 @@ construct {
   cg:allele ?variant ;
   dc:source ?article ;
   cg:alleleOrigin ?alleleOrigin ;
+  cg:zygosity ?probandZygosity ;
   cg:paternityMaternityConfirmed ?paternityMaternityConfirmed .
 
 # Proband with variant evidence item

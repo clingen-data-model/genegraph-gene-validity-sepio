@@ -1,0 +1,328 @@
+#+TITLE: Phenopackets-alignment migration plan
+#+AUTHOR: planning notes
+#+STARTUP: overview
+
+This document plans the migration of two SEPIO attributes — proband *Age* and
+*Gestational age* — into shapes that match Phenopackets v2 ~TimeElement~
+(~core/base.proto~). The motivation, target shape, and prior-art crosswalk are
+in ~spec/phenopackets-comparision.org~ ("Same-thing, different-shape attributes").
+
+Both migrations share most of the mechanics — the gestational-age plan is
+essentially a single extra branch in the same machinery. They are written as
+separate phases so each can land on its own.
+
+* Background
+
+** Current SEPIO shape
+
+Three flat predicates on ~cg:Proband~, emitted by both
+~src/genegraph/transform/gene_validity/sepio_model/construct_proband_score.sparql~
+(SOPv5–SOPv7.v1, lines 30–34, 108–119) and
+~src/genegraph/transform/gene_validity/sepio_model/construct_variant_score.sparql~
+(SOPv7.v2 + SOPv8, lines 31–35, 119–129):
+
+#+begin_src turtle
+?individual a cg:Proband ;
+  cg:ageType  ?ageType ;
+  cg:ageUnit  ?ageUnit ;
+  cg:ageValue ?ageValue .
+#+end_src
+
+The vocabulary (from the JSON-LD context in
+~src/genegraph/transform/gene_validity/gci_model.clj~ lines 197–217):
+
+| GCI string         | SEPIO IRI            |
+|--------------------+----------------------|
+| ~"Death"~          | ~cg:AgeAtDeath~      |
+| ~"Diagnosis"~      | ~cg:AgeAtDiagnosis~  |
+| ~"Onset"~          | ~cg:AgeAtOnset~      |
+| ~"Report"~         | ~cg:AgeAtReport~     |
+| ~"Years"~          | ~cg:Years~           |
+| ~"Months"~         | ~cg:Months~          |
+| ~"Weeks"~          | ~cg:Weeks~           |
+| ~"Days"~           | ~cg:Days~            |
+| ~"Hours"~          | ~cg:Hours~           |
+| ~"Weeks gestation"~ | ~cg:WeeksGestation~ |
+
+SHACL constraint at ~resources/gene_validity_shacl.ttl:137-142~ pins
+~cg:ageUnit~ to exactly one of those six unit IRIs.
+
+Other touch points to be aware of:
+- ~src/genegraph/transform/gene_validity/names.clj:126-128~ defines the
+  obsolete SEPIO terms ~:sepio/age-type~, ~:sepio/age-unit~, ~:sepio/age-value~
+  in the prefix table — kept for historical compatibility but unused by the
+  current SEPIO output.
+- ~src/genegraph/transform/gene_validity/validation.clj:80-88~ has commented-out
+  test scaffolding noting that "ageUnit and ageType not translating
+  appropriately" — there is no live age validation today.
+- ~website_events.clj~ does *not* reference any age predicate; the stakeholder
+  event format is unaffected.
+- The ~gci_express.clj~ legacy ingester (untracked working copy in the tree) is
+  out of scope.
+
+** Target shape (Phenopackets ~TimeElement~)
+
+Phenopackets v2 (~base.proto~) carries time-of-life as a oneof:
+
+#+begin_src protobuf
+message Age           { string iso8601duration = 1; }
+message GestationalAge { int32 weeks = 1; int32 days = 2; }
+message TimeElement   { oneof element { GestationalAge gestational_age; Age age; ... } }
+#+end_src
+
+In RDF we will mirror this as two sibling classes that share the role of "time
+element," replacing the three flat predicates with a single linked node:
+
+#+begin_src turtle
+?individual a cg:Proband ;
+  cg:age [ a cg:Age ;
+           cg:ageContext cg:AgeAtOnset ;
+           cg:iso8601Duration "P40Y10M5D"^^xsd:string ] .
+
+# or, when the GCI unit is "Weeks gestation":
+?individual a cg:Proband ;
+  cg:age [ a cg:GestationalAge ;
+           cg:ageContext cg:AgeAtReport ;
+           cg:weeks 28 ;
+           cg:days  0 ] .
+#+end_src
+
+Note that Phenopackets uses ~TimeElement~ as a *typed slot* whose meaning
+("at last encounter," "onset," "resolution") is fixed by which field carries
+it. SEPIO's source data carries the meaning *as a value* (~ageType~), so we
+keep that as a property (~cg:ageContext~) on the time-element node rather than
+splitting into multiple typed predicates. This preserves round-trip with GCI
+without inventing four new properties.
+
+* Phase 1 — migrate ~Age~ to ISO 8601 duration
+
+** Decisions to lock first
+
+1. *Predicate name on ~cg:Proband~*: ~cg:age~. (Singular; cardinality 0..1
+   matches the source — only one age struct per proband in GCI.)
+2. *Time-element class*: ~cg:Age~. The ~cg:iso8601Duration~ literal is typed
+   ~xsd:string~ (not ~xsd:duration~) because Jena's ~xsd:duration~ parsing is
+   strict and we want to preserve the literal form Phenopackets emits.
+3. *Carry the ~ageType~ semantic*: as ~cg:ageContext~ on the node, valued
+   from the existing four IRIs (~cg:AgeAtDeath~, ~cg:AgeAtDiagnosis~,
+   ~cg:AgeAtOnset~, ~cg:AgeAtReport~). No new vocabulary needed.
+4. *Identity of the age node*: a fresh IRI derived from the proband IRI
+   suffix (e.g. ~<proband>_age~) rather than a blank node, so the node is
+   addressable from SPARQL/JSON-LD frame queries.
+5. *Removal of legacy predicates*: emit *only* the new shape. Per project
+   convention (no backwards-compat shims), ~cg:ageType~/~cg:ageUnit~/
+   ~cg:ageValue~ disappear from the output the moment the new shape lands.
+   Downstream consumers must be coordinated — see step 7.
+
+** ISO 8601 duration mapping
+
+Built entirely with SPARQL ~CONCAT~/~STR~ — no Clojure post-processing
+required.
+
+| GCI ~ageUnit~ IRI    | ISO 8601 form    | Notes                      |
+|----------------------+------------------+-----------------------------|
+| ~cg:Years~           | ~"P{n}Y"~        |                             |
+| ~cg:Months~          | ~"P{n}M"~        | Calendar month, not minute  |
+| ~cg:Weeks~           | ~"P{n}W"~        |                             |
+| ~cg:Days~            | ~"P{n}D"~        |                             |
+| ~cg:Hours~           | ~"PT{n}H"~       | ~T~ separator required      |
+| ~cg:WeeksGestation~  | (Phase 2 — see below) | Routes to ~cg:GestationalAge~ |
+
+The SPARQL idiom (use a ~COALESCE~ chain so unknown units yield ~UNDEF~ and
+the triple is dropped, never silently wrong):
+
+#+begin_src sparql
+BIND(
+  COALESCE(
+    IF(?ageUnit = cg:Years,  CONCAT("P", STR(?ageValue), "Y"), 1/0),
+    IF(?ageUnit = cg:Months, CONCAT("P", STR(?ageValue), "M"), 1/0),
+    IF(?ageUnit = cg:Weeks,  CONCAT("P", STR(?ageValue), "W"), 1/0),
+    IF(?ageUnit = cg:Days,   CONCAT("P", STR(?ageValue), "D"), 1/0),
+    IF(?ageUnit = cg:Hours,  CONCAT("PT", STR(?ageValue), "H"), 1/0)
+  ) AS ?iso8601Duration) .
+#+end_src
+
+(The ~1/0~ inside ~IF~ trick raises an evaluation error on the false branch,
+which ~COALESCE~ skips — standard SPARQL pattern for table-driven mapping.)
+
+** Steps
+
+1. *Verify the unit enumeration on real data.* Run a one-off REPL query
+   over a recent event-store dump in ~genegraph.user~:
+   #+begin_src clojure
+   (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2025-03-24.edn.gz"]
+     (->> (event-store/event-seq r)
+          (map transform-curation)
+          (mapcat #(rdf/ld-> (:gene-validity/gci-model %) [:gci/ageUnit]))
+          frequencies))
+   #+end_src
+   Confirm no surprise values appear (e.g. raw strings that escaped the
+   context-map vocab translation). Update the table above if any are found.
+
+2. *Add the SPARQL fragment* to a shared snippet file —
+   ~sepio_model/_age_iso8601.sparql~ — or inline it in both consumers.
+   Inline is simpler given there are only two call sites; share if a third
+   ever appears.
+
+3. *Modify ~construct_proband_score.sparql~*:
+   - Replace lines 31–33 (the three ~cg:age*~ triples in the CONSTRUCT) with
+     two triples: ~?individual cg:age ?ageNode .~ and a new block typing
+     ~?ageNode~ as ~cg:Age~ with ~cg:ageContext~ and ~cg:iso8601Duration~.
+   - Add a ~BIND(IRI(CONCAT(STR(?individual), "_age")) AS ?ageNode)~.
+   - Replace the three OPTIONAL blocks reading ~gci:ageType~/~ageValue~/
+     ~ageUnit~ (lines 109–119) with a single OPTIONAL that reads all three
+     together, plus the BIND chain above. Drop the row entirely if the unit
+     is missing (no half-formed Age nodes).
+
+4. *Mirror the change* in ~construct_variant_score.sparql~ (same edits at
+   lines 31–34 and 119–129).
+
+5. *Update the SHACL shape* at ~resources/gene_validity_shacl.ttl:132-142~:
+   - Remove ~cg:ProbandAgeUnitShape~.
+   - Add ~cg:ProbandAgePropertyShape~ on ~cg:Proband~: ~sh:path cg:age~,
+     ~sh:maxCount 1~, ~sh:class cg:Age~ (or ~cg:GestationalAge~ — see
+     Phase 2).
+   - Add ~cg:AgeShape~: ~sh:targetClass cg:Age~, with property shapes
+     - ~cg:iso8601Duration~ ~xsd:string~, ~sh:minCount 1 sh:maxCount 1~,
+       ~sh:pattern "^P(?!$)(\\d+Y)?(\\d+M)?(\\d+W)?(\\d+D)?(T(\\d+H)?(\\d+M)?(\\d+S)?)?$"~
+     - ~cg:ageContext~ ~sh:in ( cg:AgeAtDeath cg:AgeAtDiagnosis cg:AgeAtOnset cg:AgeAtReport )~,
+       ~sh:maxCount 1~.
+
+6. *Add a validation check* to ~validation.clj~: a SPARQL query that returns
+   any ~cg:Proband~ with a non-empty ~cg:age~ subgraph that fails the SHACL
+   shape. (The commented-out scaffolding at lines 80–88 is the model.)
+
+7. *Sweep downstream consumers.* Confirm none of the following reference the
+   old predicates before deletion:
+   - ~website_events.clj~ — already verified clean.
+   - ~resources/frame.json~ — needs inspection (the JSON-LD frame may name
+     ~ageType~/~ageUnit~/~ageValue~ for output shaping).
+   - The ~gene-validity-sepio-jsonld~ topic consumers (external — coordinate
+     via the team channel before merging).
+
+8. *Regression test* against a corpus:
+   #+begin_src clojure
+   (event-store/with-event-reader [r ".../gene_validity_complete-2025-03-24.edn.gz"]
+     (->> (event-store/event-seq r)
+          (map transform-curation)
+          (filter #(seq (rdf/ld-> (:gene-validity/model %) [:cg/Statement '* :cg/age])))
+          (take 50)
+          (map :gene-validity/json-ld)
+          (run! tap>)))
+   #+end_src
+   Verify ISO durations parse with ~java.time.Period.parse~ /
+   ~Duration.parse~ as appropriate.
+
+9. *Versioning impact.* This is a model-structure change. ~versioning.clj~
+   compares old and new RDF; affected curations will hit a non-isomorphic
+   diff and minor-bump on first reprocess. That is expected; document in the
+   release notes that the bump is mechanical, not a re-curation.
+
+** What we are explicitly *not* doing in Phase 1
+
+- Splitting ~cg:ageContext~ into four typed predicates
+  (~cg:ageAtDeath~/~ageAtDiagnosis~/~ageAtOnset~/~ageAtReport~). Keeping it
+  as a value preserves a clean GCI round-trip and avoids inventing
+  vocabulary the consumer cannot enumerate.
+- Introducing ~cg:TimeElement~ as a parent class. There is currently exactly
+  one slot (~cg:age~ on ~cg:Proband~); a parent class adds no analytic
+  power. Revisit if/when a second slot appears (e.g. age-at-segregation on
+  ~cg:FamilyCosegregation~).
+- Touching ~names.clj~'s legacy ~:sepio/age-*~ entries. They are unused by
+  the live transform; deleting them is a separate cleanup.
+- Backfilling old Kafka messages. Reprocessing the ~gene_validity_all~ topic
+  through the new pipeline will regenerate every record into the new shape.
+
+* Phase 2 — extract ~GestationalAge~
+
+Phenopackets carries gestational age as a *separate* class
+(~GestationalAge {weeks, days}~) so it cannot be confused with a postnatal
+ISO-8601 duration. The natural trigger in our data is
+~ageUnit = cg:WeeksGestation~ — when present, the source value is always a
+week count.
+
+** Steps
+
+1. *Confirm the GCI source carries no day component.* Run the same REPL
+   probe as Phase 1 step 1 but filter to ~cg:WeeksGestation~ rows and
+   inspect ~ageValue~ for non-integer or compound values. If GCI ever
+   produces "28+3" style strings, parse them; otherwise treat ~days~ as a
+   constant ~0~.
+
+2. *Branch the SPARQL CONSTRUCT.* In both ~construct_proband_score.sparql~
+   and ~construct_variant_score.sparql~, after Phase 1's ~?ageNode~ binding,
+   add a parallel construct gated on the unit:
+
+   #+begin_src sparql
+   # In CONSTRUCT:
+   ?ageNode a ?ageClass ;
+     cg:ageContext   ?ageType ;
+     cg:iso8601Duration ?iso8601Duration ;  # only when not gestational
+     cg:weeks         ?gestWeeks ;          # only when gestational
+     cg:days          ?gestDays .           # only when gestational
+
+   # In WHERE:
+   BIND(IF(?ageUnit = cg:WeeksGestation, cg:GestationalAge, cg:Age) AS ?ageClass) .
+   BIND(IF(?ageUnit = cg:WeeksGestation, xsd:integer(?ageValue), 1/0) AS ?gestWeeks) .
+   BIND(IF(?ageUnit = cg:WeeksGestation, 0, 1/0) AS ?gestDays) .
+   #+end_src
+
+   The ~1/0~ pattern again: when the branch does not apply, the binding
+   raises and SPARQL drops the corresponding triple from the CONSTRUCT. The
+   ~?iso8601Duration~ binding from Phase 1 must likewise be guarded so it
+   does not fire on gestational rows — wrap it with
+   ~IF(?ageUnit != cg:WeeksGestation, ..., 1/0)~.
+
+3. *Drop ~cg:WeeksGestation~ from the unit enumeration* in
+   ~resources/gene_validity_shacl.ttl~. The old constraint listed it
+   alongside ~cg:Years~/etc.; after migration, gestational units are no
+   longer expressed as a postnatal duration unit at all — they live in a
+   different class.
+
+4. *Add a SHACL shape for ~cg:GestationalAge~*: ~sh:targetClass
+   cg:GestationalAge~, with
+   - ~cg:weeks~ ~xsd:integer~, ~sh:minCount 1 sh:maxCount 1~,
+     ~sh:minInclusive 0 sh:maxInclusive 45~ (a generous upper bound that
+     catches data-entry typos).
+   - ~cg:days~ ~xsd:integer~, ~sh:maxCount 1~, ~sh:minInclusive 0
+     sh:maxInclusive 6~.
+
+5. *Update the ~cg:ProbandAgePropertyShape~* from Phase 1 step 5 to allow
+   either class:
+   ~sh:or ( [ sh:class cg:Age ] [ sh:class cg:GestationalAge ] )~.
+
+6. *Add a validation row* in ~validation.clj~: any ~cg:GestationalAge~ with
+   ~cg:weeks~ outside [0,45] or ~cg:days~ outside [0,6] is a fail.
+
+7. *Test on real data.* Gestational age is uncommon in gene-validity
+   curations (rare onset context); the corpus pass from Phase 1 step 8 may
+   yield few or zero positives. Construct a synthetic event-store row if
+   needed to exercise the branch.
+
+8. *Versioning + release notes.* Same as Phase 1: mechanical minor bump on
+   affected curations.
+
+** What we are explicitly *not* doing in Phase 2
+
+- Introducing ~cg:TimeInterval~, ~cg:AgeRange~, or the Phenopackets
+  ontology-class onset variant. GCI does not carry data for any of those.
+- Coercing ~ageContext~ values into Phenopackets attachment-point semantics
+  (~Individual.time_at_last_encounter~ vs ~PhenotypicFeature.onset~).
+  That is a downstream Phenopackets-emit concern, not a SEPIO-shape concern.
+
+* Open questions
+
+- Should ~cg:age~ ever appear at cardinality > 1? GCI emits one struct per
+  proband today, but if a future SOP wants both age-at-onset and
+  age-at-report on the same proband, the chosen ~<proband>_age~ IRI suffix
+  forces a redesign. *Recommendation*: keep singular for Phase 1; if
+  multiplicity arrives, switch the suffix to include the context value
+  (~_age_AgeAtOnset~).
+- Does the JSON-LD frame at ~resources/frame.json~ need a corresponding
+  shape update so consumers see the nested ~age~ object, not flattened
+  triples? *Action*: read the frame during Phase 1 step 7 and adjust if
+  needed.
+- Are there external consumers of the ~gene-validity-sepio~ N-Triples topic
+  (outside ~genegraph-website~) that parse ~cg:ageType~/~ageUnit~/~ageValue~
+  directly? Coordinate before deletion.
+  

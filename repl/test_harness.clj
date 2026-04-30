@@ -32,12 +32,12 @@
             [clojure.spec.alpha :as spec]))
 
 (defn gdm-id [e]
-  (or (get-in e [::event/data :resourceParent :gdm :PK])
-      (get-in e [::event/data :resourceParent :gdm :uuid])
-      (get-in e [::event/data :properties :resourceParent :gdm :uuid])))
+  (or (get-in e [:resourceParent :gdm :PK])
+      (get-in e [:resourceParent :gdm :uuid])
+      (get-in e [:properties :resourceParent :gdm :uuid])))
 
 (def source-file
-  "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-04-13.edn.gz")
+  "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-04-30.edn.gz")
 
 (comment
 
@@ -62,9 +62,9 @@
   ;; stop test app
   (p/stop test-app)
 
+  (tap> test-app)
 
-  
-  (tap> test-app))
+  )
 
 ;; processes to load event and validate the initial loading
 (comment
@@ -73,11 +73,6 @@
    (event-store/with-event-reader [r source-file]
      (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
            (event-store/event-seq r))))
-
-  (time
-   (event-store/with-event-reader [r source-file]
-     (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
-           (take 1 (event-store/event-seq r)))))
 
   (+ 1 1)
 
@@ -304,6 +299,16 @@
     (assoc event :gene-validity/model model)
     (assoc event ::error :model-not-found)))
 
+(defn outcome->gci-model [event db]
+  (if-let [model (storage/read db [:transforms
+                                      :gene-validity/gci-model
+                                      (::event/offset event)
+                                      (get-in event [:versions
+                                                     :gene-validity/gci-model])])]
+    (assoc event :gene-validity/gci-model model)
+    (assoc event ::error :model-not-found)))
+
+
 (defn outcome->event [outcome db]
   (storage/read db [:events
                     :gene-validity-complete
@@ -344,7 +349,8 @@ select ?el where {
   (println (json/write-str {:a "aaa" :b "bbb"} :indent true))
 
   (+ 1 1)
-  
+
+  ;; x4
   (->> (gdm-id->events (second test-set) test-app)
        (take 1)
        #_(map #(assoc % :tap-abbrev true :pp-model true))
@@ -660,7 +666,7 @@ select ?el where {
          (map #(outcome->model % store))
          (map (fn [e]
                 (->> (q (:gene-validity/model e))
-                     (map #(rdf/ld1-> % [:cg/ageUnit]))
+                     (map #(some-> (rdf/ld1-> % [:cg/ageType]) rdf/->kw))
                      set)))
          (reduce set/union)
          tap>))
@@ -676,18 +682,56 @@ select ?el where {
          (take 1)
          tap>))
 
-  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
-        q (rdf/create-query "select ?p where { ?p a :cg/Proband } ")]
+
+  ;; issues with reprocessing
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (snapshot/latest-records store)
          #_(take 1)
+         (map #(outcome->model % store))
+         (remove :gene-validity/model)
+         #_count
+         (mapv ::event/offset)))
+
+  ;; x3
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         (remove :gene-validity/valid)
+         count))
+
+
+  ;; first run
+  ;; second run has same issues
+  ;; issue (effectively) resolved--many probands have events without time units
+  [963 592 1511 1311 1369 227]
+
+  ;; x2
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        xform-topic (get-in test-app [:topics :transform-topic])
+        evt (storage/read db [:events :gene-validity-complete 963])]
+    #_(tap> evt)
+    (p/publish xform-topic
+                 (assoc evt
+                        :tap-without-models true
+                        :pp-model true
+                        #_#_:pp-gci-model true
+                        :force-reload #{:gene-validity/gci-model
+                                        :gene-validity/json-ld
+                                        :gene-validity/model
+                                        :gene-validity/website-event})))
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         #_(take 1000)
+         #_(storage/scan store [:outcomes])
          (map #(outcome->model % store))
          (map validation/validate-fn)
          (remove #(get-in % [:gene-validity/shacl-report :conforms?]))
          (mapv #(dissoc % :gene-validity/model))
-         #_count
+         #_(mapv #(into #{} (map :constraint (get-in % [:gene-validity/shacl-report :entries]))))
+         count
          #_(take 1)
          #_(run! #(rdf/pp-model (:gene-validity/model %)))
-         tap>))
+         #_tap>))
 
 
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
@@ -713,3 +757,65 @@ select ?el where {
 
 
 (str/trim "\n")
+
+;; migrating age
+(comment
+  ;; ageUnit
+  (def unitset #{:cg/Months :cg/WeeksGestation :cg/Days :cg/Hours :cg/Weeks :cg/Years})
+;; ageType
+(def typeset #{:cg/AgeAtReport :cg/AgeAtOnset :cg/AgeAtDeath :cg/AgeAtDiagnosis})
+
+("Months" "WeeksGestation" "Days" "Hours" "Weeks" "Years")
+
+("AgeAtReport" "AgeAtOnset" "AgeAtDeath" "AgeAtDiagnosis")
+
+(let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+      q (rdf/create-query "
+select ?p where {
+ ?p a :cg/Proband ;
+ :cg/ageUnit :cg/Hours .
+  } ")]
+  "filter (?unit NOT IN ( :cg/WeeksGestation ) )"
+  (->> (snapshot/latest-records store)
+       #_(take 100)
+       (map #(outcome->model % store))
+       (map (fn [e]
+              (->> (q (:gene-validity/model e))
+                   count
+                   #_(map #(some-> (rdf/ld1-> % [:cg/ageType]) rdf/->kw))
+                   #_set)))
+       (reduce +)
+       #_(reduce set/union)
+       tap>))
+
+
+
+
+  )
+
+
+;; observing report on fields in sex
+
+(comment
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "
+select ?p where {
+ ?p a :cg/Proband .
+  } ")]
+    (->> (snapshot/latest-records store)
+         #_(take 100)
+         (map #(outcome->model % store))
+         (map (fn [e]
+                (->> (q (:gene-validity/model e))
+                     (map #(some-> (rdf/ld1-> % [:cg/sex]) rdf/->kw))
+                     set)))
+         (reduce set/union)
+         tap>))
+  )
+
+
+;; todo
+
+;; have (I think) finally addressed issues with parallel processor -- should validate
+;; create and deploy production deployment
+;; create and deploy 

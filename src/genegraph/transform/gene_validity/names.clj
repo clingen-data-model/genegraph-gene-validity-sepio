@@ -1,35 +1,53 @@
 (ns genegraph.transform.gene-validity.names
-  (:require [genegraph.framework.storage.rdf.names :as names :refer [add-prefixes add-keyword-mappings]]))
+  (:require [genegraph.framework.storage.rdf.names
+             :as names
+             :refer [add-prefixes add-keyword-mappings]]
+            [genegraph.framework.storage.rdf :as rdf]))
+
+(rdf/add-literal-attrs
+ #{:cg/dateLastEvaluated
+   :cg/date
+   :dc/description
+   :schema/email
+   :schema/givenName
+   :schema/familyName
+   :rdfs/label
+   :cg/observedLOF
+   :cg/expectedLOF
+   :cg/priorMean
+   :cg/mean
+   :cg/lower95CI
+   :cg/upper95CI})
 
 (add-prefixes
-{"dc" "http://purl.org/dc/terms/"
- "hp" "http://purl.obolibrary.org/obo/HP_"
- "sepio" "http://purl.obolibrary.org/obo/SEPIO_"
- "geno" "http://purl.obolibrary.org/obo/GENO_"
- "mondo" "http://purl.obolibrary.org/obo/MONDO_"
- "cg" "https://genegraph.clinicalgenome.org/terms/"
- "cgdosage" "http://dx.clinicalgenome.org/entities/"
- "gg" "https://genegraph.clinicalgenome.org/r/"
- "foaf" "http://xmlns.com/foaf/0.1/"
- "rdfs" "http://www.w3.org/2000/01/rdf-schema#"
- "rdf" "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
- "owl" "http://www.w3.org/2002/07/owl#"
- "sks" "http://www.w3.org/2004/02/skos/core#"
- "ncbigene" "https://www.ncbi.nlm.nih.gov/gene/"
- "prov" "http://www.w3.org/ns/prov#"
- "void" "http://rdfs.org/ns/void"
- "omim" "https://omim.org/entry/"
- "cnt" "http://www.w3.org/2011/content#"
- "hgnc" "https://identifiers.org/hgnc:"
- "cgagent" "https://genegraph.clinicalgenome.org/agent/"
- "pmid" "https://pubmed.ncbi.nlm.nih.gov/"
- "ro" "http://purl.obolibrary.org/obo/RO_"
- "ga4gh" "https://terms.ga4gh.org/"
- "cvscv" "https://identifiers.org/clinvar.submission:"
- "oboinowl" "http://www.geneontology.org/formats/oboInOwl#"
- "efo" "http://www.ebi.ac.uk/efo/"
- "genegraph" "https://genegraph.clingen.app/"
- "shacl" "http://www.w3.org/ns/shacl#"})
+ {"dc" "http://purl.org/dc/terms/"
+  "hp" "http://purl.obolibrary.org/obo/HP_"
+  "sepio" "http://purl.obolibrary.org/obo/SEPIO_"
+  "geno" "http://purl.obolibrary.org/obo/GENO_"
+  "mondo" "http://purl.obolibrary.org/obo/MONDO_"
+  "cg" "https://genegraph.clinicalgenome.org/terms/"
+  "cgdosage" "http://dx.clinicalgenome.org/entities/"
+  "gg" "https://genegraph.clinicalgenome.org/r/"
+  "foaf" "http://xmlns.com/foaf/0.1/"
+  "rdfs" "http://www.w3.org/2000/01/rdf-schema#"
+  "rdf" "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  "owl" "http://www.w3.org/2002/07/owl#"
+  "sks" "http://www.w3.org/2004/02/skos/core#"
+  "ncbigene" "https://www.ncbi.nlm.nih.gov/gene/"
+  "prov" "http://www.w3.org/ns/prov#"
+  "void" "http://rdfs.org/ns/void"
+  "omim" "https://omim.org/entry/"
+  "cnt" "http://www.w3.org/2011/content#"
+  "hgnc" "https://identifiers.org/hgnc:"
+  "cgagent" "https://genegraph.clinicalgenome.org/agent/"
+  "pmid" "https://pubmed.ncbi.nlm.nih.gov/"
+  "ro" "http://purl.obolibrary.org/obo/RO_"
+  "ga4gh" "https://terms.ga4gh.org/"
+  "cvscv" "https://identifiers.org/clinvar.submission:"
+  "oboinowl" "http://www.geneontology.org/formats/oboInOwl#"
+  "efo" "http://www.ebi.ac.uk/efo/"
+  "genegraph" "https://genegraph.clingen.app/"
+  "shacl" "http://www.w3.org/ns/shacl#"})
 
 (add-keyword-mappings
  {:bfo/realizes "http://purl.obolibrary.org/obo/BFO_0000055"

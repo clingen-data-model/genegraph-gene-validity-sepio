@@ -132,7 +132,8 @@ cg:NoEvidencePropertyShape
 cg:ProbandShape
     a sh:NodeShape ;
     sh:targetClass cg:Proband ;
-    sh:property cg:ProbandAgeUnitShape .
+    sh:property cg:ProbandAgeUnitShape ;
+    sh:property cg:ProbandSexShape .
 
 cg:ProbandAgeUnitShape
     a sh:PropertyShape ;
@@ -141,3 +142,11 @@ cg:ProbandAgeUnitShape
     sh:in ( cg:Years cg:Months cg:WeeksGestation cg:Days cg:Weeks cg:Hours ) ;
     sh:message "cg:Proband cg:ageUnit must be one of cg:Years, cg:Months, cg:WeeksGestation, cg:Days, cg:Weeks, or cg:Hours" .
 
+cg:ProbandSexShape
+    a sh:PropertyShape ;
+    sh:path cg:sex ;
+    sh:maxCount 1 ;
+    sh:in ( cg:AmbiguousSex cg:Male cg:Female cg:Intersex cg:Unknown cg:Other) ;
+    sh:message "cg:Proband cg:sex outside value set" .
+    
+        

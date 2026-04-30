@@ -7,8 +7,10 @@
             [clojure.edn :as edn]
             #_[clojure.data.json :as json]
             [charred.api :as charred]
-            [io.pedestal.interceptor :as interceptor])
-  (:import [java.io ByteArrayInputStream]))
+            [io.pedestal.interceptor :as interceptor]
+            [io.pedestal.log :as log])
+  (:import [java.io ByteArrayInputStream]
+           [java.time Duration]))
 
 (def base "https://genegraph.clinicalgenome.org/r/")
 (def legacy-report-base "https://genegraph.clinicalgenome.org/r/legacy-report_")
@@ -192,7 +194,7 @@
 
             "Hispanic or Latino" "cg:HispanicOrLatino"
             "Not Hispanic or Latino" "cg:NotHispanicOrLatino"
-            "Unknown" "cg:UnknownEthnicity"
+            "Unknown" "cg:Unknown"
 
             ;; Consider restructring this part of the model
             ;; ageType
@@ -248,7 +250,7 @@
             "Homozygosity mapping" "cg:HomozygosityMapping"
             "Linkage analysis" "cg:LinkageAnalysis"
             "Next generation sequencing panels" "cg:GenePanels"
-            "Other" "cg:OtherVariantDetectionMethod"
+            "Other" "cg:Other"
             "PCR" "cg:PCR"
             "Restriction digest" "cg:RestrictionDigest"
             "SSCP" "cg:SSCP"
@@ -312,19 +314,6 @@
     (dissoc m :provisionalClassifications)
     m))
 
-#_(defn remove-keys-when-empty
-  "When element is a map, removes any keys with key names from 'keys' vector that
-  has an empty value." 
-  [element keys]
-  (postwalk (fn [x] (if (map? x)
-                      (->> (select-keys x keys)
-                           (reduce (fn [coll [k v]]
-                                     (if (empty? v) (conj coll k) coll))
-                                   [])
-                           (apply dissoc x))
-                      x))
-            element))
-
 (defn remove-keys-when-empty
   "When element is a map, removes any keys with key names from 'keys' vector that
   has an empty value." 
@@ -343,6 +332,43 @@
 (defn remove-extra-provisional-classifications [data]
   (update-in data [:resourceParent :gdm] dissoc :provisionalClassifications))
 
+(Duration/ofDays 12)
+
+(defn proband->age-duration [{:keys [ageUnit ageValue]}]
+  (str
+   (case ageUnit
+     "Months" (Duration/ofDays (* 30 ageValue))
+     "Weeks gestation" (Duration/ofDays (* 7 ageValue))
+     "Days" (Duration/ofDays ageValue)
+     "Hours" (Duration/ofHours ageValue)
+     "Weeks" (Duration/ofDays (* 7 ageValue))
+     "Years" (Duration/ofDays (* 365 ageValue))
+     (do
+       (log/info :fn ::proband->age-duration
+                 :error :duration-not-found
+                 :duration ageUnit
+                 :value ageValue)
+       ""))))
+
+
+
+(defn add-age-in-iso8601-duration [e]
+  (if (and (map? e) (:proband e) (:ageType e) (:ageUnit e) (:ageValue e))
+    (assoc e
+           :events
+           [{:ageISO8601 (proband->age-duration e)
+             :ageEvent (second (re-find #"AgeAt(.*)$" (:ageType e)))
+             :ageBasis (if (= "WeeksGestation" (:ageUnit e))
+                         "Gestation"
+                         "Birth")}])
+    e))
+
+(add-age-in-iso8601-duration
+ {:ageUnit "Years"
+  :ageValue 34
+  :ageType "AgeAtDiagnosis"
+  :proband true})
+
 (defn preprocess-json
   "Walk GCI JSON prior to parsing as JSON-LD to clean up data."
   [data]
@@ -352,6 +378,7 @@
                   fix-hpo-ids
                   expand-affiliation-to-iri
                   clear-extra-provisional-classifications
+                  add-age-in-iso8601-duration
                   (remove-keys-when-empty [:geneWithSameFunctionSameDisease
                                            :normalExpression
                                            :scores

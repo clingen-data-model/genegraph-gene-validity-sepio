@@ -62,8 +62,8 @@
           :ports [{:name "genegraph-port" :containerPort 8888}]
           :readinessProbe {:httpGet {:path "/ready" :port "genegraph-port"}}
           :volumeMounts [{:mountPath "/data" :name "local-volume"}]
-          :resources {:requests {:memory "2Gi" :cpu "500m"}
-                      :limits {:memory "2Gi"}}}]
+          :resources {:requests {:memory "4Gi" :cpu "500m"}
+                      :limits {:memory "4Gi"}}}]
         :tolerations [{:key "kubernetes.io/arch"
                        :operator "Equal"
                        :value "arm64"

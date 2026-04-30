@@ -33,5 +33,5 @@
  {ch.qos.logback/logback-classic                    {:mvn/version "1.5.0"}
   org.clojure/clojure                               {:mvn/version "1.12.0"}
   io.github.clingen-data-model/genegraph-framework 
-  {:git/sha "1a095f6796d85d5555928cfd9306a317baceab01"}
+  {:git/sha "373bfc7f97abad877a693a542c3b35b4f6af33fd"}
 }}

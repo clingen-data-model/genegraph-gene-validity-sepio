@@ -413,7 +413,7 @@
             :trigger-snapshot
             {:name :trigger-snapshot
              :type :timer-topic
-             :interval (* 1000 60 60)}}
+             :interval (* 1000 60 10)}}
    :storage {:gene-validity-version-store (assoc gene-validity-version-store
                                                  :reset-opts {:destroy-snapshot true})}
    :processors {:gene-validity-transform
@@ -458,4 +458,4 @@
                                  (reset! run-atom false)
                                  (p/stop app))))
     (p/start app)
-    (periodically-store-snapshots app 6 run-atom)))
+    (periodically-store-snapshots app 1 run-atom)))
