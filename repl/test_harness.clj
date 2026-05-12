@@ -350,12 +350,20 @@ select ?el where {
 
   (+ 1 1)
 
-  ;; x4
-  (->> (gdm-id->events (second test-set) test-app)
+  ;; x5
+  "ff18d307-80a8-44b8-8b1a-e26e8a7d912a"
+  (->> (gdm-id->events "ff18d307-80a8-44b8-8b1a-e26e8a7d912a" test-app)
        (take 1)
        #_(map #(assoc % :tap-abbrev true :pp-model true))
        (map #(assoc % :tap-json true))
        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
+
+   ;; x4
+   (->> (gdm-id->events (second test-set) test-app)
+        (take 1)
+        #_(map #(assoc % :tap-abbrev true :pp-model true))
+        (map #(assoc % :tap-json true))
+        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
 
   (->> (gdm-id->outcomes (second test-set) test-app)
        tap>)
@@ -583,7 +591,7 @@ select ?el where {
    (assoc (storage/read @(get-in test-app
                            [:storage :gene-validity-version-store :instance])
                   [:events :gene-validity-complete 8159])
-          :tap-without-models true
+          :tap-json true
           :force-reload #{:gene-validity/json-ld
                           :gene-validity/model
                           :gene-validity/website-event}))
@@ -629,13 +637,25 @@ select ?el where {
            (map ::json)
            (run! #(json/write % w :indent :true)))))
 
+  ;; return-gdi1
   (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (snapshot/latest-records store)
          (filter #(= (:gene-validity/gene %)
                      "https://identifiers.org/hgnc:4226"))
-         (map #(outcome->json % store))
-         (map ::json)
+         #_(map #(outcome->json % store))
+         #_(map ::json)
          tap>))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        xform-topic (get-in test-app [:topics :transform-topic])
+        evt (storage/read db [:events :gene-validity-complete 10957])]
+    (p/publish xform-topic
+               (assoc evt
+                      :tap-json true
+                      :force-reload #{#_:gene-validity/gci-model
+                                      :gene-validity/json-ld
+                                      :gene-validity/model
+                                      :gene-validity/website-event})))
 
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
         xform-topic (get-in test-app [:topics :transform-topic])
@@ -819,3 +839,55 @@ select ?p where {
 ;; have (I think) finally addressed issues with parallel processor -- should validate
 ;; create and deploy production deployment
 ;; create and deploy 
+
+
+"ff18d307-80a8-44b8-8b1a-e26e8a7d912a"
+;; investingating reports of missing PMIDs
+(comment
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         #_(take 1000)
+         #_(storage/scan store [:outcomes])
+         (map #(outcome->model % store))
+         (map validation/validate-fn)
+         (remove #(get-in % [:gene-validity/shacl-report :conforms?]))
+         (mapv #(dissoc % :gene-validity/model))
+         #_(mapv #(into #{} (map :constraint (get-in % [:gene-validity/shacl-report :entries]))))
+         count
+         #_(take 1)
+         #_(run! #(rdf/pp-model (:gene-validity/model %)))
+         #_tap>))
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         (pmap (fn [e]
+                 (-> (outcome->model e store)
+                     validation/validate-fn)))
+         (remove #(get-in % [:gene-validity/shacl-report :conforms?]))
+         count))
+
+  ;;   HGNC:4288 gjb6
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query " select ?pmid where { ?ev :dc/source ?pmid } ")]
+    (->> (snapshot/latest-records store)
+         (filter #(= "https://genegraph.clinicalgenome.org/r/e055960a-a364-4c03-85ff-30f93730c380"
+                     (:gene-validity/gdm %)))
+         #_(mapv #(-> %
+                    (outcome->model store)
+                    (outcome->json store)))
+         #_(mapv #(outcome->event % store))
+         (mapv (fn [e] [(set/difference
+                         (set (mapv #(get-in % [:article :pmid])
+                                    (get-in (outcome->event e store)
+                                            [::event/data
+                                             :properties
+                                             :resourceParent
+                                             :gdm
+                                             :annotations])))
+                         (set (mapv #(re-find #"\d+$" (str %))
+                                    (q (:gene-validity/model (outcome->model e store))))))]))
+         #_tap>
+         #_(mapv #(q (:gene-validity/model %)))))
+
+
+)

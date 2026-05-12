@@ -8,8 +8,8 @@ construct
   ?gdm a cg:GeneValidityProposition ;
   cg:subjectGene ?hgnc ;
   cg:objectCondition ?disease ;
-  cg:predicate cg:GeneValidityPredicate ;
-  cg:qualifierModeOfInheritance ?moi .
+  cg:predicate cg:variantsInGeneCausalFor ;
+  cg:modeOfInheritanceQualifier ?moi .
 }
 where
 {

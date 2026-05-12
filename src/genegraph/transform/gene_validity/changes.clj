@@ -42,7 +42,7 @@ select ?o where { ?o a :cg/Statement . }")]
    {:change-type :cg/MOIChange
     :query "select ?o where {
  ?a a :cg/GeneValidityProposition ;
- :cg/qualifierModeOfInheritance ?o }"
+ :cg/modeOfInheritanceQualifier ?o }"
     :required true}
    {:change-type :cg/expertPanelChange
     :query "select ?o where {

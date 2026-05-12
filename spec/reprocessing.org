@@ -383,3 +383,31 @@ Not sure about need to explore in GCI
 *** ageType and ageUnit fields #7
 
 Seems like this should be another thing we can test against known valuests
+
+** Matt's latest comments
+
+*** Conform with draft PR for Proposition
+
+*** Remove subject from Statement
+
+*** Clarify specifiedBy
+
+MHB: the value of this property needs to be a Method object or a reference to one ...is GeneValidityCriteria10 the id for one, or jsut a string?
+
+*** score->scoreOfEvidenceProvided
+
+*** hasEvidenceLines -> hasEvidenceItems for EvidenceLines referencing other EvidenceLines
+
+MHB: This should be `hasEvidenceItems`, not `hasEvidenceLines` (I know in this case the evidence item is an evidence line, but SEPIO/VA EvidenceLine objects have a 'hasEvidenceItems' property. Fix this issue throughout - specifically, make sure Statement objects use hasEvidenceLine, and EvidenceLine objects us hasEvidenceItem (even if that evidence item is another EvidenceLine)
+
+*** Investigate StudyResult
+
+MHB: This is not yet a VA/SEPIO compliant StudyResult, but it would be fairly easy to address this (or, represent it as a statement)
+
+*** direction -> directionOfEvidenceProvided
+
+MHB: in an EvidneceLine, direction is captured in a 'directionOfEvidenceProvided' property. Needs fixing throughout - specifically, for Statement objects, use 'direction', and for EvidenceLine objects, use 'directionOfEvidenceProvided`.
+
+*** strengthScore -> scoreOfEvidenceProvided
+
+Thought I took care of all of this; will need to check

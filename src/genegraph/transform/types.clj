@@ -5,7 +5,7 @@
                    :defining-attributes
                    [:cg/subjectGene
                     :cg/objectCondition
-                    :cg/qualifierModeOfInheritance
+                    :cg/modeOfInheritanceQualifier
                     :cg/predicate]})
 
 
