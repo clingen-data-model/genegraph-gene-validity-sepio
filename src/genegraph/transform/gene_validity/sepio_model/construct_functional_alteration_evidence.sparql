@@ -9,9 +9,9 @@ construct {
   cg:specifiedBy ?criteria ;
   dc:description ?scoreDescription ;
   cg:hasEvidenceItems ?evidenceItem ;
-  cg:direction ?scoreStatus ;
+  cg:directionOfEvidenceProvided ?scoreStatus ;
   cg:calculatedScore ?calculatedScore ;
-  cg:strengthScore ?score .
+  cg:scoreOfEvidenceProvided ?score .
 
   # TODO identify functional alteration field
   ?evidenceItem  a cg:FunctionalAlteration ;

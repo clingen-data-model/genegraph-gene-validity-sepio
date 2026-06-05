@@ -5,16 +5,16 @@
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.log :as log]))
 
-(id/register-type {:type :cg/GeneValidityProposition
+(id/register-type {:type :cg/GeneDiseaseValidityProposition
                    :defining-attributes
                    [:cg/subjectGene :cg/objectCondition :cg/modeOfInheritanceQualifier :cg/predicate]})
 
 (def prop-query
-  (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }"))
+  (rdf/create-query "select ?x where { ?x a :cg/GeneDiseaseValidityProposition }"))
 
 (defn proposition-id [model]
   (when-let [prop (first (prop-query model))]
-    (->{:type :cg/GeneValidityProposition
+    (->{:type :cg/GeneDiseaseValidityProposition
         :cg/subjectGene (str (rdf/ld1-> prop [:cg/subjectGene]))
         :cg/objectCondition (str (rdf/ld1-> prop [:cg/objectCondition]))
         :cg/modeOfInheritanceQualifier (str (rdf/ld1-> prop [:cg/modeOfInheritanceQualifier]))
@@ -30,12 +30,12 @@ construct {
   ?s2 ?p2 ?propIRI .
 } where {
  { ?s ?p ?o .
-   FILTER NOT EXISTS { ?s a :cg/GeneValidityProposition . }
-   FILTER NOT EXISTS { ?o a :cg/GeneValidityProposition . }
+   FILTER NOT EXISTS { ?s a :cg/GeneDiseaseValidityProposition . }
+   FILTER NOT EXISTS { ?o a :cg/GeneDiseaseValidityProposition . }
  }
  union
  {
-  ?s1 a :cg/GeneValidityProposition .
+  ?s1 a :cg/GeneDiseaseValidityProposition .
   ?s1 ?p1 ?o1 .
   ?s2 ?p2 ?s1 .
  }

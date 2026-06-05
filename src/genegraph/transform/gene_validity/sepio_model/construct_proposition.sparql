@@ -5,7 +5,7 @@ prefix hp: <http://purl.obolibrary.org/obo/HP_>
 
 construct 
 {
-  ?gdm a cg:GeneValidityProposition ;
+  ?gdm a cg:GeneDiseaseValidityProposition ;
   cg:subjectGene ?hgnc ;
   cg:objectCondition ?disease ;
   cg:predicate cg:variantsInGeneCausalFor ;

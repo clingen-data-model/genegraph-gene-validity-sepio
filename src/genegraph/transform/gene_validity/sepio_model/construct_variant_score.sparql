@@ -9,10 +9,10 @@ prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
 construct {
   ?evidenceLine a cg:EvidenceLine ;
-  cg:strengthScore ?score ;
+  cg:scoreOfEvidenceProvided ?score ;
   cg:hasEvidenceItems ?evidenceItem , ?functionEvidenceItem ; # evidence about variant
   cg:calculatedScore ?resultCalculatedScore ;
-  cg:direction ?scoreStatus ;
+  cg:directionOfEvidenceProvided ?scoreStatus ;
   cg:specifiedBy ?criteria ;
   dc:description ?evidenceLineDescription .
 
@@ -22,8 +22,9 @@ construct {
   dc:source ?article ;
   cg:alleleOrigin ?alleleOrigin ;
   cg:paternityMaternityConfirmed ?paternityMaternityConfirmed ;
+  cg:observedIn ?individual ; # Check pattern in < SOP7
   cg:zygosity ?zygosity .
-  
+
 # Proband with variant evidence item
   ?individual a cg:Proband ;
   dc:source ?article ;

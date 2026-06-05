@@ -14,9 +14,9 @@ prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 construct {
   ?probandScoreEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityMaximumProbandScoreCriteria ;
-  cg:direction ?scoreStatus ;
+  cg:directionOfEvidenceProvided ?scoreStatus ;
   cg:hasEvidenceItems ?individual ;
-  cg:hasEvidenceLines ?variantEvidenceLine .
+  cg:hasEvidenceItems ?variantEvidenceLine .
 } where {
 
   ?individual gci:variantScores ?variantEvidenceLine .

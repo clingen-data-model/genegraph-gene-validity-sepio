@@ -8,7 +8,7 @@ construct
   
   ?autosomalRecessiveVariantEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityOverallAutosomalRecessiveVariantEvidenceCriteria ;
-  cg:strengthScore ?autosomalRecessiveDisorderTotal .  
+  cg:scoreOfEvidenceProvided ?autosomalRecessiveDisorderTotal .  
 }
 where
 {

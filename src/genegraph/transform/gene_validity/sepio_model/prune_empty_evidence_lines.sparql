@@ -11,9 +11,9 @@ where
   FILTER NOT EXISTS {
     ?s a cg:EvidenceLine .
     FILTER NOT EXISTS {
-      ?s cg:hasEvidenceLines ?evidence .
+      ?s cg:hasEvidenceItems ?evidence .
     }
-    ?s cg:strengthScore ?score .
+    ?s cg:scoreOfEvidenceProvided ?score .
     FILTER(?score = 0) 
   }
 }

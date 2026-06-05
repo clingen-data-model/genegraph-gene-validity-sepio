@@ -9,7 +9,7 @@
 	"cggv": "https://genegraph.clinicalgenome.org/r/gci/",
 	"classification": {"@type": "@vocab"},
 	"calculatedClassification": {"@type": "@vocab"},
-	"specifiedBy":  {"@type": "@vocab"},
+	"specifiedBy":  {"@type": "@id"},
 	"evidence": {"@container": "@set"},
 	"hasEvidenceLines": {"@container": "@set"},
 	"disease": {"@type": "@vocab"},

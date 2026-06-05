@@ -1,0 +1,81 @@
+* Introduction
+
+
+* Classes
+
+
+** Study Result
+These are going to be one of the main evidence items in our data set--possibly the main evidence item. I'm not sure how comfortable I am modelling a Proband as a study result, but there may still be some semantics worth keeping.
+
+I think in every case it will make more sense to subclass StudyResult, rather than attempting to use the type directly; there are distinct but useful concepts for each of these that would fit better as a type. For each of these I can define specialized classes. Probably is worth scanning the GCI for these types. We should define SHACL shapes for the GCI data.
+
+*** Focus
+Probably the gene. Probably worth populating
+*** dataItems
+Not used, class specific attributes probably better
+*** interpretation
+Probably worthwhile
+*** sourceDataSet
+Maybe used; assigning universal IDs to data sets might be a worthwhile endeavor.
+*** componentResult
+Might be able to use this for VariantObservation to describe the functional effect of the variant.
+*** studyGroup
+Could be used for a case control study
+** Biochemical Function
+The gene product performs a biochemical function shared with other known genes in the disease of interest, OR the gene product is consistent with the observed phenotype(s)
+** Protein Interaction
+The gene product interacts with proteins previously implicated (genetically or biochemically) in the disease of interest
+** Expression
+The gene is expressed in tissues relevant to the disease of interest, OR the gene is altered in expression in patients who have the disease
+** Functional Alteration
+The gene and/or gene product function is demonstrably altered in cultured patient or non-patient cells carrying candidate variant(s)
+** Model Systems
+Non-human model organism OR cell culture model with a similarly disrupted copy of the affected gene shows a phenotype consistent with human disease state
+** Rescue
+The phenotype in humans, non-human model organisms, cell culture models, or patient cells can be rescued by exogenous wild-type gene or gene product
+** Variant Level Evidence
+
+Should Proband be a subclass of individual?
+
+An individual is more than a study result, and has traits that span studies.
+
+The observation of a phenotype in an individual could be a little bit different, however.
+
+Does this class represent an individual, or the observation of an individual in the context of a study.
+
+I think always the latter. They are asigned a specific local label relative to the study. Whether or not this is a 'study result'.
+
+We needed to reify variant observation so that a variant observed in a proband could be scored.
+
+This is uncomplicated for AD cases, but complex for AR.
+
+Each variant gets assigned a separate score.
+
+*** GenotypeStudyResult
+
+I think that this data does not belong at the proband layer. What I need is a utility class that can describe variants detected and their relationship to each other. (cis/trans) and some level of confidence regarding this result. For GCI data this will mostly be a 1-1 relationship, but
+
+Zygosity
+Phase Status
+Maybe move everything related to the genotype up here.
+*** Proband / Individual
+
+*** Family
+
+Similar issues for Proband.
+
+*** Group
+
+Where is Group actually used? May need to poke around for this. I don't think I bother with these for my data.
+
+** Contribution
+
+Need to add code to normalize 10000 series GCEP IDs. Could probably do this in the JSON pre-processing stage and not have to change any of the other code.
+
+*** Secondary Approver
+
+*** Primary Approver
+
+* Warnings
+
+For each of these I should have a shape in the SHACL file. Some of these might be showstoppers (DLQ, do not publish), but others might just be irregularities to note. One example would be in translating durations as described using GCI terminology to ISO durations, as used in Phenopackets.

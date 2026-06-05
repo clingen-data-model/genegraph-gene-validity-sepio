@@ -90,6 +90,7 @@
             "probandIs" {"@type" "@vocab"}
             "genotypingMethods" {"@container" "@list"}
             "curationReasons" {"@type" "@vocab"}
+            "phaseStatus" {"@type" "@vocab"}
 
             ;; ;; Category names
             "Model Systems" "gcixform:ModelSystems"
@@ -165,7 +166,7 @@
             ;; "8" "http://purl.obolibrary.org/obo/SEPIO_0004096"
             ;; "9" "http://purl.obolibrary.org/obo/SEPIO_0004171"
             ;; "10" "http://purl.obolibrary.org/obo/SEPIO_0004190"
-
+            
             "4" "cg:GeneValidityCriteria4"
             "5" "cg:GeneValidityCriteria5"
             "6" "cg:GeneValidityCriteria6"
@@ -174,6 +175,8 @@
             "9" "cg:GeneValidityCriteria9"
             "10" "cg:GeneValidityCriteria10"
             "11" "cg:GeneValidityCriteria11"
+            "12" "cg:GeneValidityCriteria12"
+            "13" "cg:GeneValidityCriteria13"
 
 
             ;; Sex
@@ -195,6 +198,10 @@
             "Hispanic or Latino" "cg:HispanicOrLatino"
             "Not Hispanic or Latino" "cg:NotHispanicOrLatino"
             "Unknown" "cg:Unknown"
+
+            "UNKNOWN" "cg:Unknown"
+            "SUSPECTED_IN_TRANS" "cg:SuspectedInTrans"
+            "PROVEN_IN_TRANS" "cg:ProvenInTrans"
 
             ;; Consider restructring this part of the model
             ;; ageType
@@ -289,14 +296,22 @@
             
             }}))))
 
+(defn update-gcep-id
+  "Originally GCEP IDs began with a 1, these were later modified to begin with a 4 
+  to allow a separate identifier scheme for gceps and vceps."
+  [id]
+  (if (and (string? id) (= "1" (subs id 0 1)))
+    (str "4" (subs id 1))
+    id))
+
 (defn expand-affiliation-to-iri
   "Expand affiliation when a simple string field, to be an iri"
   [m]
   (if (and (map? m) (get m :affiliation))
     (update m :affiliation (fn [affiliation]
-                              (if (coll? affiliation)
-                                affiliation
-                                (str affbase affiliation))))
+                             (if (coll? affiliation)
+                               affiliation
+                               (str affbase (update-gcep-id affiliation)))))
     m))
 
 (defn fix-hpo-ids [m]

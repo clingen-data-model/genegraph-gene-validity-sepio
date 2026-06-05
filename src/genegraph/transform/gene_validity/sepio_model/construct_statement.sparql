@@ -8,9 +8,8 @@ construct {
   
   ?classification a cg:Statement ;
   cg:proposition ?proposition ;
-  cg:subject ?hgnc ;
   cg:classification ?evidencelevel ;
-  cg:contributions ?contribution , ?publishContribution ;
+  cg:contributions ?contribution , ?publishContribution, ?approvalContribution, ?additionalApprovalContribution ;
   dc:description ?description_text ;
   cg:calculatedClassification ?autoEvidenceLevel ;
   cg:specifiedBy ?sopVersion ;
@@ -22,6 +21,16 @@ construct {
   ?contribution cg:contributor ?affiliation ;
   a cg:Contribution ;
   cg:activityType cg:Evaluated ;
+  cg:date ?date .
+
+  ?additionalApprovalContribution cg:contributor ?additionalApprover ;
+  a cg:Contribution ;
+  cg:activityType cg:Approved ;
+  cg:date ?date .
+
+  ?approvalContribution cg:contributor ?affiliation ;
+  a cg:Contribution ;
+  cg:activityType cg:Approved ;
   cg:date ?date .
 
   ?publishContribution cg:contributor ?affiliation ;
@@ -44,8 +53,12 @@ where {
   gci:alteredClassification ?alteredEvidenceLevel ;
   gci:classificationPoints ?pointsTree .
 
+  OPTIONAL {
+    ?classification gci:additionalApprover ?additionalApprover .
+    BIND(IRI(CONCAT(STR(?classification), "_additional_approval")) AS ?additionalApprovalContribution ) .
+  }
 
-
+  
   OPTIONAL {
     ?classification gci:curationReasons ?curation_reasons .
   }
@@ -93,6 +106,8 @@ where {
 
   BIND(IRI(CONCAT(STR(?classification), "_contrib")) AS ?contribution ) .
 
+  BIND(IRI(CONCAT(STR(?classification), "_approval")) AS ?approvalContribution ) .
+  
   BIND(IRI(CONCAT(STR(?classification), "_publish_contrib")) AS ?publishContribution ) .
 
   ?pointsTree gci:evidencePointsTotal ?evidencePointsTotal .

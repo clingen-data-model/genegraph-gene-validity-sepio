@@ -30,7 +30,7 @@
                  second
                  (str "http://purl.obolibrary.org/obo/HP_")
                  rdf/resource)]
-    {:type :cg/GeneValidityProposition
+    {:type :cg/GeneDiseaseValidityProposition
      :cg/gene gene
      :cg/disease (rdf/resource (-> report :conditions :MONDO :iri))
      :cg/modeOfInheritance moi}))
@@ -46,7 +46,7 @@
                  second
                  (str "http://purl.obolibrary.org/obo/HP_")
                  rdf/resource)]
-    [[iri :rdf/type :cg/GeneValidityProposition]
+    [[iri :rdf/type :cg/GeneDiseaseValidityProposition]
      [iri :cg/gene gene]
      [iri :cg/disease (rdf/resource (-> report :conditions :MONDO :iri))]
      [iri :cg/modeOfInheritance moi]]))
@@ -119,7 +119,7 @@
                  second
                  (str "http://purl.obolibrary.org/obo/HP_")
                  rdf/resource)]
-    {:type :cg/GeneValidityProposition
+    {:type :cg/GeneDiseaseValidityProposition
      :cg/gene gene
      :cg/disease (rdf/resource (-> report :conditions :MONDO :iri))
      :cg/modeOfInheritance moi}))
@@ -164,7 +164,7 @@
        (str "http://purl.obolibrary.org/obo/HP_")))
 
 (defn ->proposition [src report]
-  (let [p {:type :cg/GeneValidityProposition
+  (let [p {:type :cg/GeneDiseaseValidityProposition
            :cg/subjectGene (->gene src)
            :cg/objectCondition (->condition src)
            :cg/predicate :cg/GeneValidityPredicate

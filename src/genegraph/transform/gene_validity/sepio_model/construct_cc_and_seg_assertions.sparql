@@ -3,15 +3,15 @@ prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 
 construct
 {
-  ?geneticEvidenceLine cg:hasEvidenceLines ?caseControlEvidenceLine , ?segregationEvidenceLine .
+  ?geneticEvidenceLine cg:hasEvidenceItems ?caseControlEvidenceLine , ?segregationEvidenceLine .
 
   ?caseControlEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityOverallCaseControlEvidenceCriteria ;
-  cg:strengthScore ?caseControlTotal .
+  cg:scoreOfEvidenceProvided ?caseControlTotal .
 
   ?segregationEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValiditySegregationEvidenceCriteria ;
-  cg:strengthScore ?segregationTotal .
+  cg:scoreOfEvidenceProvided ?segregationTotal .
   
 }
 where

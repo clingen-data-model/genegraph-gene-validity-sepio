@@ -187,12 +187,12 @@ select ?gdm where
       (map
        #(vector 
          %
-         :cg/strengthScore
+         :cg/scoreOfEvidenceProvided
          (min 3                ; current cap on sop v8+ proband scores
               (reduce
                + 
                (rdf/ld-> % [:cg/hasEvidenceLines
-                            :cg/strengthScore]))))
+                            :cg/scoreOfEvidenceProvided]))))
        proband-evidence-lines)))))
 
 (defn publish-action [gci-data params]

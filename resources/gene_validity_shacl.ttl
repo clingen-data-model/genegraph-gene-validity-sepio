@@ -39,9 +39,9 @@ cg:StatementPropositionShape
     a sh:PropertyShape ;
     sh:path cg:proposition ;
     sh:minCount 1 ;
-    sh:qualifiedValueShape [ sh:class cg:GeneValidityProposition ] ;
+    sh:qualifiedValueShape [ sh:class cg:GeneDiseaseValidityProposition ] ;
     sh:qualifiedMinCount 1 ;
-    sh:message "cg:Statement must have a cg:proposition of type cg:GeneValidityProposition" .
+    sh:message "cg:Statement must have a cg:proposition of type cg:GeneDiseaseValidityProposition" .
 
 cg:StatementEvaluatedContributionShape
     a sh:PropertyShape ;

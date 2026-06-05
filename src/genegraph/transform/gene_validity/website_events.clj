@@ -149,7 +149,7 @@ select ?act where {
 (def proposition-query
   (rdf/create-query "
 select ?x where {
- ?x a :cg/GeneValidityProposition .
+ ?x a :cg/GeneDiseaseValidityProposition .
 }"))
 
 (defn proposition-id [m]

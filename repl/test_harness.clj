@@ -29,7 +29,9 @@
             [clojure.set :as set]
             [charred.api :as charred]
             [clojure.walk :as walk]
-            [clojure.spec.alpha :as spec]))
+            [clojure.spec.alpha :as spec])
+  (:import [ch.qos.logback.classic Logger Level]
+           [org.slf4j LoggerFactory]))
 
 (defn gdm-id [e]
   (or (get-in e [:resourceParent :gdm :PK])
@@ -37,7 +39,7 @@
       (get-in e [:properties :resourceParent :gdm :uuid])))
 
 (def source-file
-  "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-04-30.edn.gz")
+  "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-05-12.edn.gz")
 
 (comment
 
@@ -58,7 +60,7 @@
                         ::event/completion-promise (promise)
                         ::event/skip-local-effects true
                         ::event/skip-publish-effects true))))
-
+  
   ;; stop test app
   (p/stop test-app)
 
@@ -66,13 +68,19 @@
 
   )
 
+(def root-data-dir "/Users/tristan/data/genegraph-gene-validity-sepio/")
+
 ;; processes to load event and validate the initial loading
 (comment
-    ;; load current gene validity events
+  ;; load current gene validity events
   (time
    (event-store/with-event-reader [r source-file]
      (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
            (event-store/event-seq r))))
+
+  ;; write latest events for testing in API
+
+
 
   (+ 1 1)
 
@@ -314,6 +322,58 @@
                     :gene-validity-complete
                     (::event/offset outcome)]))
 
+;; looking at structure of existing sepio event file
+(comment
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene-validity-sepio-2025-10-09.edn.gz"]
+    (->> (event-store/event-seq r)
+         (take 1)
+         (into [])
+         tap>))
+  )
+
+(def output-events-path "/Users/tristan/data/sepio-events/events.edn.gz")
+
+(comment
+  (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene-validity-sepio-2025-10-09.edn.gz"]
+    (->> (event-store/event-seq r)
+         (take 1)
+         (into [])
+         tap>))
+  )
+
+;; testing rsult
+(comment
+  (event-store/with-event-reader [r output-events-path]
+    (->> (event-store/event-seq r)
+         (take 1)
+         (into [])
+         tap>))
+  )
+
+(defn write-records-for-api [app]
+  (let [store @(get-in app [:storage :gene-validity-version-store :instance])]
+    (.setLevel
+     (LoggerFactory/getLogger Logger/ROOT_LOGGER_NAME) Level/ERROR)
+    (event-store/with-event-writer [ew output-events-path]
+      (->> (storage/scan store [:outcomes])
+           (map #(outcome->model % store))
+           (map (fn [e]
+                  (-> {::event/format ::rdf/n-triples
+                       ::event/kafka-topic "gene-validity-sepio"
+                       ::event/key (::event/key e)
+                       ::event/timestamp (::event/timestamp e)
+                       ::event/offset (::event/offset e)
+                       ::event/data (:gene-validity/model e)}
+                      event/serialize
+                      (dissoc ::event/data))))
+           (run! prn)))
+    (.setLevel (LoggerFactory/getLogger Logger/ROOT_LOGGER_NAME) Level/INFO)))
+
+
+(comment
+  (write-records-for-api test-app)
+  )
+
 ;; adding the take statement
 ;; seems to prevent a race condition
 (comment
@@ -331,20 +391,22 @@ select ?el where {
 }")]
     (->> (snapshot/latest-records store)
          (remove :gene-validity/valid)
-         #_(take 1)
+         ;; (take 1)
+         ;; (into [])
+         ;; tap>
          #_(map #(outcome->json % store))
          #_(map #(outcome->model % store))
          #_(map #(q (:gene-validity/model %)))
          count))
   
   (with-open [w (io/writer "/users/tristan/Desktop/gdi1.json")]
-   (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
-     (->> (snapshot/latest-records store)
-          (filter #(= (:gene-validity/gene %)
-                      "https://identifiers.org/hgnc:4226"))
-          (map #(outcome->json % store))
-          (map ::json)
-          (run! #(json/write % w :indent :true)))))
+    (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+      (->> (snapshot/latest-records store)
+           (filter #(= (:gene-validity/gene %)
+                       "https://identifiers.org/hgnc:4226"))
+           (map #(outcome->json % store))
+           (map ::json)
+           (run! #(json/write % w :indent :true)))))
 
   (println (json/write-str {:a "aaa" :b "bbb"} :indent true))
 
@@ -358,12 +420,12 @@ select ?el where {
        (map #(assoc % :tap-json true))
        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
 
-   ;; x4
-   (->> (gdm-id->events (second test-set) test-app)
-        (take 1)
-        #_(map #(assoc % :tap-abbrev true :pp-model true))
-        (map #(assoc % :tap-json true))
-        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
+  ;; x4
+  (->> (gdm-id->events (second test-set) test-app)
+       (take 1)
+       #_(map #(assoc % :tap-abbrev true :pp-model true))
+       (map #(assoc % :tap-json true))
+       (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
 
   (->> (gdm-id->outcomes (second test-set) test-app)
        tap>)
@@ -642,21 +704,87 @@ select ?el where {
     (->> (snapshot/latest-records store)
          (filter #(= (:gene-validity/gene %)
                      "https://identifiers.org/hgnc:4226"))
-         #_(map #(outcome->json % store))
-         #_(map ::json)
+         (map #(outcome->json % store))
+         (map ::json)
          tap>))
 
+  ;; latest gdi1
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
         xform-topic (get-in test-app [:topics :transform-topic])
         evt (storage/read db [:events :gene-validity-complete 10957])]
     (p/publish xform-topic
                (assoc evt
                       :tap-json true
-                      :force-reload #{#_:gene-validity/gci-model
+                      :force-reload #{:gene-validity/gci-model
                                       :gene-validity/json-ld
                                       :gene-validity/model
                                       :gene-validity/website-event})))
 
+  ;; trmt1 capturing phase status
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "
+select ?x where {?x a :gg/individual ; :gg/phaseStatus ?p }")]
+    (->> (snapshot/latest-records store)
+         #_(take 500)
+         #_(filter #(= (:gene-validity/gene %)
+                     "https://identifiers.org/hgnc:25980"))
+         (mapv #(some-> (outcome->gci-model % store)
+                        :gene-validity/gci-model 
+                        q))
+         (mapcat (fn [i] (map #(rdf/ld1-> % [:gg/phaseStatus]) i)))
+         set
+         #_(run! #(rdf/pp-model (:gene-validity/gci-model %)))))
+
+  #{"UNKNOWN" "SUSPECTED_IN_TRANS" "PROVEN_IN_TRANS"}
+  
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        xform-topic (get-in test-app [:topics :transform-topic])
+        evt (storage/read db [:events :gene-validity-complete 13613])]
+    
+    #_(tap> evt)
+    #_(p/publish xform-topic
+                 (assoc evt
+                        :tap-without-models true
+                        :pp-gci-model true
+                        :force-reload #{:gene-validity/gci-model
+                                        :gene-validity/json-ld
+                                        :gene-validity/model
+                                        :gene-validity/website-event})))
+
+
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         (filter #(= "https://genegraph.clinicalgenome.org/terms/Definitive"
+                     (:gene-validity/classification %)))
+         (take 1)
+         tap>))
+  
+  ;; return-esco2 Secondary Approver Issue
+  ;; Need to implement GCEP ID Translator
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         (filter #(= (:gene-validity/gene %)
+                     "https://identifiers.org/hgnc:27230"))
+         (map #(outcome->json % store))
+         (map ::json)
+         tap>))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        xform-topic (get-in test-app [:topics :transform-topic])
+        evt (storage/read db [:events :gene-validity-complete 9879])]
+    #_(tap> evt)
+    (p/publish xform-topic
+                 (assoc evt
+                        :tap-without-models true
+                        :tap-json true
+                        :pp-model true
+                        :force-reload #{:gene-validity/gci-model
+                                        :gene-validity/json-ld
+                                        :gene-validity/model
+                                        :gene-validity/website-event})))
+
+  
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
         xform-topic (get-in test-app [:topics :transform-topic])
         evt (storage/read db [:events :gene-validity-complete 10957])]
@@ -669,7 +797,7 @@ select ?el where {
                                       :gene-validity/model
                                       :gene-validity/website-event})))
 
-  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/gci-model
+  (time (gv/reprocess-events test-app {:force-reload #{#_:gene-validity/gci-model
                                                        :gene-validity/json-ld
                                                        :gene-validity/model
                                                        :gene-validity/website-event}}))
@@ -891,3 +1019,48 @@ select ?p where {
 
 
 )
+
+;; testing restoration of event snapshot
+(comment
+  (def storage-app
+    (p/init
+     {:type :genegraph-app
+      :storage {:gene-validity-version-store
+                (assoc gv/gene-validity-version-store
+                       :reset-opts {}
+                       :load-snapshot true)}}))
+
+  (p/start storage-app)
+  (+ 1 1)
+  
+  (p/stop storage-app)
+  
+  )
+;; one time export of GCI-EX to web addresses
+(comment
+  (let [path "/Users/tristan/data/genegraph-base/gci-express-with-entrez-ids.json"
+        out-path "/Users/tristan/Desktop/gciex-links.csv"]
+    (with-open [r (io/reader path)
+                w (io/writer out-path)]
+      (->> (charred/read-json r)
+           (mapv (fn [[k v]] [(str "https://search.clinicalgenome.org/kb/gene-validity/CGGCIEX:assertion_" k)
+                              (get v "title")]))
+           (charred/write-csv w))))
+
+  (let [path "/Users/tristan/Downloads/ClinGen-Gene-Expess-Data-03272019.json"]
+    (with-open [r (io/reader path)]
+      (->> (charred/read-json r)
+           (mapv (fn [[k v]] [(str "https://search.clinicalgenome.org/kb/gene-validity/CGGCIEX:assertion_" k)
+                              (get v "title")]))
+           tap>)))
+
+  (let [path "/Users/tristan/Downloads/ClinGen-Gene-Expess-Data-03272019.json"
+        out-path "/Users/tristan/Desktop/gciex-legacy-links.csv"]
+    (with-open [r (io/reader path)
+                w (io/writer out-path)]
+      (->> (charred/read-json r)
+           (mapv (fn [[k v]] [(str "https://search.clinicalgenome.org/kb/gene-validity/CGGCIEX:assertion_" k)
+                              (get v "title")]))
+           (charred/write-csv w))))
+
+  )

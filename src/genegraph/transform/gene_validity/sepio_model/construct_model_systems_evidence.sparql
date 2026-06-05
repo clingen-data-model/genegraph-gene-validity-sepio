@@ -9,12 +9,12 @@ construct {
   cg:specifiedBy ?criteria ;
   dc:description ?scoreDescription ;
   cg:hasEvidenceItems ?evidenceItem ;
-  cg:direction ?scoreStatus ;
+  cg:directionOfEvidenceProvided ?scoreStatus ;
   cg:calculatedScore ?calculatedScore ;
-  cg:score ?score .
+  cg:scoreOfEvidenceProvided ?score .
 
   # TODO Grab the model organism from the data
-  ?evidenceItem a cg:StudyResult ;
+  ?evidenceItem a cg:Finding ;
   cg:interpretation cg:ProteinAlterationDisruptsOrganismFunction ;
   dc:description ?evidenceDescription ;
   dc:source ?article ;

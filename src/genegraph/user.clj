@@ -35,7 +35,7 @@
             ThreadPoolExecutor$CallerRunsPolicy Semaphore]))
 
 (def prop-query
-  (rdf/create-query "select ?x where { ?x a :cg/GeneValidityProposition }" ))
+  (rdf/create-query "select ?x where { ?x a :cg/GeneDiseaseValidityProposition }" ))
 
 (def assertion-query
   (rdf/create-query "select ?x where { ?x a :cg/EvidenceStrengthAssertion }" ))
@@ -125,6 +125,13 @@
     #(do
        (println "getting gv-complete")
        (time (get-events-from-topic gv/gene-validity-complete-topic)))))
+
+  (time (get-events-from-topic gv/processing-records-topic))
+  (time
+   (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene-validity-records-stage-2026-05-15.edn.gz"]
+     (->> (event-store/event-seq r)
+          count)))
+  
   (+ 1 1)
   (time
    (event-store/with-event-reader [r "/Users/tristan/data/genegraph-neo/gene_validity_complete-2024-07-16.edn.gz"]
@@ -1594,7 +1601,7 @@ select ?x where {
     (defn gene [e]
       (let [q (rdf/create-query "
 select ?x where {
-?p a :cg/GeneValidityProposition ;
+?p a :cg/GeneDiseaseValidityProposition ;
 :cg/subject ?x .
 }")]
         (some-> e :gene-validity/model q first str)))

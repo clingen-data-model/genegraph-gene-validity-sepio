@@ -7,7 +7,7 @@ construct
   
   ?geneticEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityOverallGeneticEvidenceCriteria ;
-  cg:score ?geneticEvidenceTotal .
+  cg:scoreOfEvidenceProvided ?geneticEvidenceTotal .
 }
 where
 {

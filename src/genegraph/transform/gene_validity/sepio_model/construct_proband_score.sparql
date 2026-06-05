@@ -10,10 +10,10 @@ prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 construct {
   ?probandScoreEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy ?criteria ;
-  cg:strengthScore ?score ;
+  cg:scoreOfEvidenceProvided ?score ;
   cg:hasEvidenceItems ?individual ; 
   cg:calculatedScore ?calculatedScore ;
-  cg:direction  ?scoreStatus ;
+  cg:directionOfEvidenceProvided  ?scoreStatus ;
   dc:description ?evidenceLineDescription .
 
   # Consider modeling as
@@ -43,7 +43,7 @@ construct {
   cg:phenotypes ?phenotypes ;
   dc:source ?article ;
   cg:zygosity ?probandZygosity ;
-  cg:variant ?evidenceItem .
+  cg:hasVariant ?evidenceItem .
   
   ?family a cg:Family ;
   rdfs:label ?familyLabel ;

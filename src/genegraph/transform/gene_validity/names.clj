@@ -92,7 +92,7 @@
   :ga4gh/VariationDescriptor "https://terms.ga4gh.org/VariationDescriptor"
   :sepio/GeneValidityEvidenceLevelAssertion "http://purl.obolibrary.org/obo/SEPIO_0004002"
   :sepio/GeneValidityEvidenceLevelAutoClassification "http://purl.obolibrary.org/obo/SEPIO_0004098"
-  :sepio/GeneValidityProposition "http://purl.obolibrary.org/obo/SEPIO_0004001"
+  :sepio/GeneDiseaseValidityProposition "http://purl.obolibrary.org/obo/SEPIO_0004001"
   :sepio/HasEvidenceLevel "http://purl.obolibrary.org/obo/SEPIO_0000146"
   :sepio/NonNullVariantEvidenceLine "http://purl.obolibrary.org/obo/SEPIO_0004121"
   :sepio/NullVariantEvidenceLine "http://purl.obolibrary.org/obo/SEPIO_0004120"

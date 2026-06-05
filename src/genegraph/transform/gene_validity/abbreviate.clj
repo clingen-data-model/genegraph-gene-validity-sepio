@@ -68,9 +68,9 @@
 
 (def model-attribute-queries
   [[:gene-validity/gene
-    "select ?g where { ?s a :cg/GeneValidityProposition ; :cg/subjectGene ?g }"]
+    "select ?g where { ?s a :cg/GeneDiseaseValidityProposition ; :cg/subjectGene ?g }"]
    [:gene-validity/disease
-    "select ?g where { ?s a :cg/GeneValidityProposition ; :cg/objectCondition ?g }"]
+    "select ?g where { ?s a :cg/GeneDiseaseValidityProposition ; :cg/objectCondition ?g }"]
    [:gene-validity/gcep
     "select ?gcep where 
 { ?s a :cg/Statement ; :cg/contributions ?contrib .
@@ -91,7 +91,7 @@ select ?class where {
 ?s a :cg/Statement ;
  :cg/proposition ?prop ;
  :cg/classification ?class .
-  ?prop a :cg/GeneValidityProposition . }"]])
+  ?prop a :cg/GeneDiseaseValidityProposition . }"]])
 
 (defn approval-date [model]
   (let [q (rdf/create-query "select ?activity where

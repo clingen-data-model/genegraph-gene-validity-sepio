@@ -9,8 +9,8 @@ construct {
   cg:specifiedBy ?criteria ;
   dc:description ?comments ;
   cg:hasEvidenceItems ?evidenceItem ;
-  cg:strengthScore ?score ;
-  cg:direction ?scoreStatus .
+  cg:scoreOfEvidenceProvided ?score ;
+  cg:directionOfEvidenceProvided ?scoreStatus .
 
 # Case control evidence item
   ?evidenceItem a cg:Finding ;

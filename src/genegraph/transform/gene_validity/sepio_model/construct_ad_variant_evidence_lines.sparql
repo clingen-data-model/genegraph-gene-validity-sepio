@@ -3,20 +3,20 @@ prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 
 construct
 {
-  ?geneticEvidenceEvidenceLine cg:hasEvidenceLines
+  ?geneticEvidenceEvidenceLine cg:hasEvidenceItems
   ?autosomalDominantOtherVariantEvidenceLine ,
   ?autosomalDominantNullVariantEvidenceLine ,
   ?autosomalDominantDeNovoVariantEvidenceLine .
   
   ?autosomalDominantOtherVariantEvidenceLine a cg:EvidenceLine ;
   cg:specifiedBy cg:GeneValidityOverallAutosomalDominantOtherVariantEvidenceCriteria ;
-  cg:strengthScore ?probandWithOtherVariantTypeWithGeneImpactTotal .
+  cg:scoreOfEvidenceProvided ?probandWithOtherVariantTypeWithGeneImpactTotal .
 
   ?autosomalDominantNullVariantEvidenceLine a cg:EvidenceLine ;   cg:specifiedBy cg:GeneValidityOverallAutosomalDominantNullVariantEvidenceCriteria ;
-  cg:strengthScore ?probandWithPredictedOrProvenNullVariantTotal .
+  cg:scoreOfEvidenceProvided ?probandWithPredictedOrProvenNullVariantTotal .
 
   ?autosomalDominantDeNovoVariantEvidenceLine a cg:EvidenceLine ;  cg:specifiedBy cg:GeneValidityOverallAutosomalDominantDeNovoVariantEvidenceCriteria ;
-  cg:strengthScore ?variantIsDeNovoTotal .
+  cg:scoreOfEvidenceProvided ?variantIsDeNovoTotal .
 }
 where
 {
