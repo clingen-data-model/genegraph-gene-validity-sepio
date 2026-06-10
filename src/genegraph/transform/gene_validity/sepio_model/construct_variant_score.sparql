@@ -42,7 +42,8 @@ construct {
   cg:detectionMethod ?methodsOfDetection ;
   cg:phenotypeFreeText ?phenotypeFreeText ;
   cg:phenotypes ?phenotypes ;
-  cg:zygosity ?probandZygosity ;
+  cg:zygosity ?zygosity ;
+  cg:phase ?phaseStatus ;
   cg:variant ?evidenceItem .
 
   ?family a cg:Family ; # http://purl.obolibrary.org/obo/PCO_0000020
@@ -113,6 +114,9 @@ where {
   gci:label ?individualLabel ;
   gci:proband true .
 
+  # Experiment with genotype concept
+  # BIND(IRI(CONCAT(STR(?individual), "_genotype")) AS ?genotype)
+       
   OPTIONAL {
     ?individual gci:sex ?sex .
   }
@@ -131,6 +135,10 @@ where {
 
   OPTIONAL {
     ?individual gci:hpoIdInDiagnosis ?phenotypes .
+  }
+
+  OPTIONAL {
+    ?individual gci:phaseStatus ?phaseStatus .
   }
 
   OPTIONAL {

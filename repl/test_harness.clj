@@ -720,7 +720,7 @@ select ?el where {
                                       :gene-validity/model
                                       :gene-validity/website-event})))
 
-  ;; trmt1 capturing phase status
+  ;; trmt1 capturing phase status -- evolving into developing genotype concept
   (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
         q (rdf/create-query "
 select ?x where {?x a :gg/individual ; :gg/phaseStatus ?p }")]
@@ -742,14 +742,15 @@ select ?x where {?x a :gg/individual ; :gg/phaseStatus ?p }")]
         evt (storage/read db [:events :gene-validity-complete 13613])]
     
     #_(tap> evt)
-    #_(p/publish xform-topic
-                 (assoc evt
-                        :tap-without-models true
-                        :pp-gci-model true
-                        :force-reload #{:gene-validity/gci-model
-                                        :gene-validity/json-ld
-                                        :gene-validity/model
-                                        :gene-validity/website-event})))
+    (p/publish xform-topic
+               (assoc evt
+                      :pp-model true
+                      :pp-gci-model true
+                      :tap-json true
+                      :force-reload #{:gene-validity/gci-model
+                                      :gene-validity/json-ld
+                                      :gene-validity/model
+                                      :gene-validity/website-event})))
 
 
 
@@ -903,19 +904,12 @@ select ?x where {?x a :gg/individual ; :gg/phaseStatus ?p }")]
   
   )
 
-
-(str/trim "\n")
-
 ;; migrating age
 (comment
   ;; ageUnit
   (def unitset #{:cg/Months :cg/WeeksGestation :cg/Days :cg/Hours :cg/Weeks :cg/Years})
-;; ageType
-(def typeset #{:cg/AgeAtReport :cg/AgeAtOnset :cg/AgeAtDeath :cg/AgeAtDiagnosis})
-
-("Months" "WeeksGestation" "Days" "Hours" "Weeks" "Years")
-
-("AgeAtReport" "AgeAtOnset" "AgeAtDeath" "AgeAtDiagnosis")
+  ;; ageType
+  (def typeset #{:cg/AgeAtReport :cg/AgeAtOnset :cg/AgeAtDeath :cg/AgeAtDiagnosis})
 
 (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
       q (rdf/create-query "
@@ -935,10 +929,6 @@ select ?p where {
        (reduce +)
        #_(reduce set/union)
        tap>))
-
-
-
-
   )
 
 
@@ -960,13 +950,6 @@ select ?p where {
          (reduce set/union)
          tap>))
   )
-
-
-;; todo
-
-;; have (I think) finally addressed issues with parallel processor -- should validate
-;; create and deploy production deployment
-;; create and deploy 
 
 
 "ff18d307-80a8-44b8-8b1a-e26e8a7d912a"
@@ -1035,32 +1018,4 @@ select ?p where {
   
   (p/stop storage-app)
   
-  )
-;; one time export of GCI-EX to web addresses
-(comment
-  (let [path "/Users/tristan/data/genegraph-base/gci-express-with-entrez-ids.json"
-        out-path "/Users/tristan/Desktop/gciex-links.csv"]
-    (with-open [r (io/reader path)
-                w (io/writer out-path)]
-      (->> (charred/read-json r)
-           (mapv (fn [[k v]] [(str "https://search.clinicalgenome.org/kb/gene-validity/CGGCIEX:assertion_" k)
-                              (get v "title")]))
-           (charred/write-csv w))))
-
-  (let [path "/Users/tristan/Downloads/ClinGen-Gene-Expess-Data-03272019.json"]
-    (with-open [r (io/reader path)]
-      (->> (charred/read-json r)
-           (mapv (fn [[k v]] [(str "https://search.clinicalgenome.org/kb/gene-validity/CGGCIEX:assertion_" k)
-                              (get v "title")]))
-           tap>)))
-
-  (let [path "/Users/tristan/Downloads/ClinGen-Gene-Expess-Data-03272019.json"
-        out-path "/Users/tristan/Desktop/gciex-legacy-links.csv"]
-    (with-open [r (io/reader path)
-                w (io/writer out-path)]
-      (->> (charred/read-json r)
-           (mapv (fn [[k v]] [(str "https://search.clinicalgenome.org/kb/gene-validity/CGGCIEX:assertion_" k)
-                              (get v "title")]))
-           (charred/write-csv w))))
-
   )

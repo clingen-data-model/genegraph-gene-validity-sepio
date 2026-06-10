@@ -189,6 +189,8 @@
             "Female" "cg:Female"
             "Intersex" "cg:Intersex"
             "Male" "cg:Male"
+            "TransMale" "cg:TransMale"
+            "TransFemale" "cg:TransFemale"
 
             ;; ethnicity
             ;; "Hispanic or Latino" "http://purl.obolibrary.org/obo/SEPIO_0004568"
@@ -293,7 +295,7 @@
             "Recuration Framework Change" "cg:RecurationFrameworkChange"
             "Recuration Error affecting score and or classification" "cg:RecurationErrorAffectingScoreorClassification"
             "Recuration Discrepancy Resolution" "cg:RecurationDiscrepancyResolution"
-            
+
             }}))))
 
 (defn update-gcep-id
@@ -384,6 +386,11 @@
   :ageType "AgeAtDiagnosis"
   :proband true})
 
+(defn fix-sex-ids [e]
+  (if (and (map? e) (= "FTM/Transman/Transgender Male" (:sex e)))
+    (assoc e :sex "TransMale")
+    e))
+
 (defn preprocess-json
   "Walk GCI JSON prior to parsing as JSON-LD to clean up data."
   [data]
@@ -394,6 +401,7 @@
                   expand-affiliation-to-iri
                   clear-extra-provisional-classifications
                   add-age-in-iso8601-duration
+                  fix-sex-ids
                   (remove-keys-when-empty [:geneWithSameFunctionSameDisease
                                            :normalExpression
                                            :scores
