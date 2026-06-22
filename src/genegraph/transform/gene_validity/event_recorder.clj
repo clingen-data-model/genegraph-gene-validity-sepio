@@ -44,12 +44,12 @@
 ;; based on existence of :outcomes
 
 (defn saved-data [{::event/keys [offset]
-                   :keys [versions]
+                   :keys [transform-version]
                    :as event}
                   data-key]
   (let [result (storage/read
                 (get-in event [::storage/storage :gene-validity-version-store])
-                [:transforms data-key offset (get versions data-key)])]
+                [:transforms data-key offset transform-version])]
     (when-not (= ::storage/miss result)
       result)))
 
@@ -58,7 +58,7 @@
   as defined by the :force-reload key."
   [event data-keys]
   (if (and (::event/offset event)
-           (:versions event)
+           (:transform-version event)
            (get-in event [::storage/storage :gene-validity-version-store]))
     (do
       (reduce
@@ -93,7 +93,7 @@
                   [:transforms
                    k
                    (::event/offset e)
-                   (get (:versions e) k)]
+                   (:transform-version e)]
                   (get event k)))
    event
    (set/difference (set data-keys)
@@ -108,12 +108,14 @@
                  [:outcomes
                   gdm
                   (::event/offset event)
-                  (get-in event [:versions :gene-validity/model])]
+                  (:transform-version event)]
                  (abbrev/abbreviate event))
     (do
       (log/warn :fn :store-event-outcome
                 :error :no-gdm)
       event)))
+
+
 
 (defn store-results [event data-keys]
   (-> event
@@ -134,8 +136,7 @@
              [:transforms
               :gene-validity/model
               (::event/offset event)
-              (dec (get-in event [:versions
-                                  :gene-validity/model]))])]
+              (dec (:transform-version event))])]
       (if (= ::storage/miss m)
         nil
         m))
@@ -150,8 +151,7 @@
            [:outcomes
             (:gene-validity/gdm event)
             (::event/offset event)
-            (dec (get-in event [:versions
-                                :gene-validity/model]))])]
+            (dec (:transform-version event))])]
     (if (= ::storage/miss o)
       nil
       o)))
@@ -169,11 +169,11 @@
       (let [m (storage/read store [:transforms
                                    :gene-validity/model
                                    (::event/offset last-outcome)
-                                   (get-in event [:versions :gene-validity/model])])
+                                   (:transform-version event)])
             w (storage/read store [:transforms
                                     :gene-validity/website-event
                                     (::event/offset last-outcome)
-                                    (get-in event [:versions :gene-validity/website-event])])]
+                                   (:transform-version event)])]
         (assoc event
                :gene-validity/previous-model m
                :gene-validity/last-outcome last-outcome

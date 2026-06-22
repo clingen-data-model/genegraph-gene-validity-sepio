@@ -154,7 +154,7 @@ select ?role where {
    :gene-validity/classification
    :gene-validity/version-str
    :gene-validity/shacl-report
-   :versions
+   :transform-version
    #_:genegraph.transform.gene-validity.event-recorder/retrieved-from-store])
 
 (defn abbreviate [event]

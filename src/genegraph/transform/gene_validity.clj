@@ -29,7 +29,7 @@
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
           (System/getenv "DX_JAAS_CONFIG")) ; prevent this in cloud deployments
-    {:platform "stage"
+    {:platform "local"
      :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG")
      :local-data-path "data/"}
     {}))
@@ -38,11 +38,7 @@
   (case (or (:platform admin-env) (System/getenv "GENEGRAPH_PLATFORM"))
     "local" {:fs-handle {:type :file :base "data/base/"}
              :public-fs-handle {:type :file :base "data/public/"}
-             :versions {:gene-validity/gci-model 1
-                        :gene-validity/unmodified-model 1
-                        :gene-validity/model 1
-                        :gene-validity/json-ld 1
-                        :gene-validity/website-event 1}
+             :transform-version 1
              :local-data-path "data/"}
     "dev" (assoc (env/build-environment "522856288592" ["dataexchange-genegraph"])
                  :version 2
@@ -59,11 +55,7 @@
                    :version 1
                    :name "stage"
                    :kafka-user "User:2592237"
-                   :versions {:gene-validity/gci-model 1
-                              :gene-validity/unmodified-model 1
-                              :gene-validity/model 1
-                              :gene-validity/json-ld 1
-                              :gene-validity/website-event 1}
+                   :transform-version 1
                    :fs-handle {:type :gcs
                                :bucket "genegraph-gene-validity-sepio-stage"}
                    :rdf-topic "gene-validity-sepio-stage"
@@ -146,25 +138,30 @@
     :enter (fn [e]
              (add-iri-fn e))}))
 
-(defn add-publish-actions-fn [{:gene-validity/keys [model json-ld website-event] :as event}]
+(defn add-publish-actions-fn [{:gene-validity/keys [model json-ld website-event]
+                               ::event/keys [offset]
+                               :as event}]
   (cond-> event
     model (event/publish (-> event
                              (set/rename-keys {::event/iri ::event/key
                                                :gene-validity/model ::event/data})
                              (select-keys [::event/key ::event/data])
-                             (assoc ::event/topic :gene-validity-sepio)))
+                             (assoc ::event/topic :gene-validity-sepio
+                                    :gene-validity/sequence offset)))
     json-ld (event/publish (-> event
                                (set/rename-keys {::event/iri ::event/key
                                                  :gene-validity/json-ld ::event/data})
                                (select-keys [::event/key ::event/data])
-                               (assoc ::event/topic :gene-validity-sepio-jsonld)))
+                               (assoc ::event/topic :gene-validity-sepio-jsonld
+                                      :gene-validity/sequence offset)))
     website-event (event/publish (-> event
                                      (set/rename-keys {::event/iri ::event/key
                                                        :gene-validity/website-event ::event/data})
                                      (select-keys [::event/key ::event/data])
-                                     (assoc ::event/topic :all-curation-events)))
+                                     (assoc ::event/topic :all-curation-events
+                                            :gene-validity/sequence offset)))
     true (event/publish {::event/data (abbrev/abbreviate event)
-                    ::event/topic :processing-records-topic})))
+                         ::event/topic :processing-records-topic})))
 
 (def add-publish-actions
   (interceptor/interceptor
@@ -271,7 +268,7 @@
    :name :gene-validity-transform
    :subscribe :transform-topic
    #_#_:backing-store :gene-validity-version-store
-   ::event/metadata (select-keys env [:versions :public-fs-handle])
+   ::event/metadata (select-keys env [:public-fs-handle :transform-version])
    :interceptors [tap-interceptor
                   #_recorder/record-event
                   (recorder/add-saved-data saved-keys)
@@ -295,7 +292,7 @@
   {:type :processor
    :name :snapshot-writer
    :subscribe :trigger-snapshot
-   ::event/metadata (select-keys env [:public-fs-handle :versions])
+   ::event/metadata (select-keys env [:public-fs-handle :transform-version])
    :interceptors [snapshot/write-snapshots]})
 
 (defn gci-event-fn [event]

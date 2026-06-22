@@ -44,7 +44,7 @@
                                   [:transforms
                                    :gene-validity/model
                                    (::event/offset r)
-                                   (get-in r [:versions :gene-validity/model])])
+                                   (:transform-version r)])
        ::event/format ::rdf/n-triples}
       event/serialize
       ::event/value))
@@ -57,7 +57,7 @@
                 [:transforms
                  :gene-validity/json-ld
                  (::event/offset r)
-                 (get-in r [:versions :gene-validity/json-ld])]))
+                 (:transform-version r)]))
 
 (defn handle->output-stream [storage-handle]
   (-> storage-handle

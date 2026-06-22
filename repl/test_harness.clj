@@ -110,7 +110,14 @@
   (let [n (keyword (str (name topic) "-output"))
         i (interceptor/interceptor
            {:name n
-            :enter (fn [e] e #_(log/info :output-topic topic))})]
+            :enter (fn [e]
+                     (event/store e
+                                  :gene-validity-version-store
+                                  [::output
+                                   topic
+                                   (or (::batch e) 0)
+                                   (or (:gene-validity/sequence e) 0)]
+                                  (::event/data e)))})]
     {:type :processor
      :name n
      :subscribe topic
@@ -372,6 +379,7 @@
 
 (comment
   (write-records-for-api test-app)
+  (+ 1 1)
   )
 
 ;; adding the take statement
@@ -417,14 +425,14 @@ select ?el where {
   (->> (gdm-id->events "ff18d307-80a8-44b8-8b1a-e26e8a7d912a" test-app)
        (take 1)
        #_(map #(assoc % :tap-abbrev true :pp-model true))
-       (map #(assoc % :tap-json true))
+       (map #(assoc % :tap-without-models))
        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
 
   ;; x4
   (->> (gdm-id->events (second test-set) test-app)
        (take 1)
        #_(map #(assoc % :tap-abbrev true :pp-model true))
-       (map #(assoc % :tap-json true))
+       (map #(assoc % :tap-without-models true))
        (run! #(p/publish (get-in test-app [:topics :transform-topic]) %)))
 
   (->> (gdm-id->outcomes (second test-set) test-app)
@@ -1018,4 +1026,48 @@ select ?p where {
   
   (p/stop storage-app)
   
+  )
+
+
+(comment
+  (def ndd-genehub
+    (with-open [r (io/reader "/Users/tristan/Downloads/Full-Data.csv")]
+      (->> (charred/read-csv r)
+           (take 5)
+           tap>)))
+  
+ )
+
+;; promise experimentation
+(comment
+  (do
+    (let [p (promise)]
+      (Thread/startVirtualThread #(println @p))
+      (Thread/sleep 500)
+      (deliver p "Hi there!")))
+  
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        events (rocksdb/range-get db                
+                                  {:prefix [:events :gene-validity-complete]
+                                   :return :ref})
+        event-promises (mapv (fn [e] [e (promise)]) events)]
+    (Thread/startVirtualThread (fn []
+                                 (clojure.pprint/pprint
+                                  (frequencies
+                                   (map #(-> % second deref) event-promises)))
+                                 #_(run! deref (map second event-promises))
+                                 (println "promises delivered")))
+    (run! (fn [[e p]]
+            (p/publish (get-in test-app [:topics :gene-validity-complete])
+                       (assoc @e
+                              ::event/completion-promise p
+                              :batch 1)))
+          event-promises))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+      (->> (rocksdb/range-get db
+                              {:prefix [::output]
+                               :return :ref})
+           count))
+
   )
