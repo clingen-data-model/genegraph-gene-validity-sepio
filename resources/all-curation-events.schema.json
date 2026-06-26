@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genegraph.clinicalgenome.org/schemas/all-curation-events.schema.json",
+  "title": "All Curation Events",
+  "description": "Stakeholder event format emitted for ClinGen curation activities (validity, dosage, actionability, variant).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_type",
+    "event_subtype",
+    "source",
+    "activity"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Version of this event schema.",
+      "examples": ["1.0"]
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["PUBLISH", "UNPUBLISH", "RETRACT", "RETIRE"]
+    },
+    "event_subtype": {
+      "type": "string",
+      "enum": ["CURATION", "TEST"]
+    },
+    "workflow": {
+      "type": "object",
+      "description": "Dates describing the lifecycle of the curation. Additional activity-specific dates may be included.",
+      "additionalProperties": false,
+      "patternProperties": {
+        "_date$": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional additional activity-specific date (ISO 8601)."
+        }
+      },
+      "properties": {
+        "classification_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 date the curation was classified."
+        },
+        "publish_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 date the curation was published."
+        },
+        "unpublish_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 date the curation was unpublished."
+        }
+      }
+    },
+    "source": {
+      "type": "string",
+      "enum": ["GCI", "VCI", "DCI", "ACI", "EREPO", "GENEGRAPH"],
+      "description": "Originating curation interface or system."
+    },
+    "activity": {
+      "type": "string",
+      "enum": ["ACTIONABILITY", "DOSAGE", "VALIDITY", "VARIANT"]
+    },
+    "references": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_uuid": {
+          "type": "string",
+          "description": "Identifier of the curation in the source system."
+        },
+        "dx_location": {
+          "type": "string"
+        },
+        "alternate_uuid": {
+          "type": "string"
+        },
+        "additional_properties": {
+          "$ref": "#/$defs/additionalProperties"
+        }
+      }
+    },
+    "affiliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "affiliate_id": {
+          "type": ["string", "number"],
+          "description": "ClinGen affiliation identifier."
+        },
+        "affiliate_name": {
+          "type": "string"
+        }
+      }
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "type": "string",
+          "description": "Human-facing version, dotted decimal string (e.g. 3.1.2)."
+        },
+        "internal": {
+          "type": "string",
+          "description": "Internal version, dotted decimal string (e.g. 3.1.2.3)."
+        },
+        "reasons": {
+          "type": "array",
+          "description": "Reason code(s) justifying the curation event.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "NEW_CURATION",
+              "RECURATION_NEW_EVIDENCE",
+              "RECURATION_COMMUNITY_REQUEST",
+              "RECURATION_ERROR_SCORE_CLASS",
+              "RECURATION_TIMING",
+              "RECURATION_DISCREP_RESOLUTION",
+              "RECURATION_FRAMEWORK",
+              "ADMIN_UPDATE_DISEASE_NAME",
+              "ADMIN_UPDATE_ERROR_CLASS",
+              "ADMIN_UPDATE_SCHEMA_CHANGE",
+              "ADMIN_UPDATE_TYPE_FORMAT",
+              "ADMIN_UPDATE_SYSTEM_ERROR",
+              "ADMIN_UPDATE_OTHER"
+            ]
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "additional_properties": {
+          "$ref": "#/$defs/additionalProperties"
+        }
+      }
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["change_code"],
+        "properties": {
+          "change_code": {
+            "type": "string",
+            "description": "Code identifying the kind of change. A new curation is assumed to have all of these by default.",
+            "enum": [
+              "CLASSIFICATION_CHANGE",
+              "DISEASE_NAME_CHANGE",
+              "DISEASE_ID_CHANGE",
+              "GENE_SYMBOL_CHANGE",
+              "MOI_CHANGE",
+              "MECHANISM_OF_DISEASE_CHANGE",
+              "EXPERT_PANEL_CHANGE",
+              "SOP_CHANGE",
+              "OTHER_CHANGE"
+            ]
+          },
+          "attribute": {
+            "type": "string",
+            "description": "Attribute that changed, when not implied by the change_code."
+          },
+          "from": {
+            "type": "string",
+            "description": "Prior value."
+          },
+          "to": {
+            "type": "string",
+            "description": "New value."
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "public": {
+          "type": "string"
+        },
+        "private": {
+          "type": "string"
+        },
+        "urls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "type": "string",
+              "format": "uri"
+            },
+            "preferred": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "additionalProperties": {
+      "type": "array",
+      "description": "Optional additional information as an array of single-entry key/value objects.",
+      "items": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

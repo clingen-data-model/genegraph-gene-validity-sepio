@@ -105,6 +105,14 @@ select ?class where {
 { ?curation :cg/curationReasons ?reasons }")]
     (->> (q model) (map rdf/->kw) set)))
 
+(defn class-statistics [model]
+  (let [q (rdf/create-query "select ?s ?o where { ?s a ?o }")]
+    (update-vals 
+     (->> (q model {::rdf/params {:type :table}})
+          (mapv #(-> % (update :s str) (update :o rdf/->kw)))
+          (group-by :o))
+     #(mapv :s %))))
+
 (defn add-model-attributes-fn [{:gene-validity/keys [model] :as event}]
   (let [activities (rdf/create-query "
 select ?role where {
@@ -115,6 +123,7 @@ select ?role where {
                      (add-query-result e k q))
                    event
                    model-attribute-queries)
+           :gene-validity/classes (class-statistics model)
            :gene-validity/curation-reasons (curation-reasons model)
            :gene-validity/approval-date (approval-date model)
            :gene-validity/activity (->> (activities model)
@@ -154,6 +163,7 @@ select ?role where {
    :gene-validity/classification
    :gene-validity/version-str
    :gene-validity/shacl-report
+   :gene-validity/classes
    :transform-version
    #_:genegraph.transform.gene-validity.event-recorder/retrieved-from-store])
 

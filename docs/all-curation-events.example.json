@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "event_type": "PUBLISH",
+  "event_subtype": "CURATION",
+  "workflow": {
+    "classification_date": "2024-04-02T07:02:34-05:00",
+    "publish_date": "2024-04-02T07:02:34-05:00",
+    "original_publish_date": "2019-11-19T12:34:02-05:00"
+  },
+  "source": "DCI",
+  "activity": "DOSAGE",
+  "references": {
+    "source_uuid": "ISCA-47392",
+    "dx_location": "dosage-sensitivity",
+    "alternate_uuid": "403c179d-bc60-49bf-8cb3-1c09ae309fff",
+    "additional_properties": [
+      { "curation_type": "Triplosensitivity" }
+    ]
+  },
+  "affiliation": {
+    "affiliate_id": "20001",
+    "affiliate_name": "Dosage Sensitivity Working Group"
+  },
+  "version": {
+    "display": "3.1.2",
+    "internal": "3.1.2.3",
+    "reasons": ["RECURATION_NEW_EVIDENCE"],
+    "description": "New evidence published in PMID 123456 provided justification for reassessing this gene for triplosensitivity",
+    "additional_properties": [
+      { "triplosensitivity_score": "2" },
+      { "haploinsufficiency_score": "1" }
+    ]
+  },
+  "changes": [
+    {
+      "change_code": "DISEASE_NAME_CHANGE",
+      "from": "Old disease name",
+      "to": "New disease name",
+      "attribute": ""
+    },
+    {
+      "change_code": "SOP_CHANGE",
+      "from": "7",
+      "to": "10",
+      "attribute": ""
+    }
+  ],
+  "notes": {
+    "public": "",
+    "private": "Although the scores did not change, new evidence was evaluated, thus dictating the new version",
+    "urls": {
+      "source": "https://dci.clinicalgenome.org/api/curation/403c179d-bc60-49bf-8cb3-1c09ae309fff"
+    }
+  }
+}

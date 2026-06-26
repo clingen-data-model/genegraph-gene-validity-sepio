@@ -318,8 +318,7 @@
   (if-let [model (storage/read db [:transforms
                                       :gene-validity/gci-model
                                       (::event/offset event)
-                                      (get-in event [:versions
-                                                     :gene-validity/gci-model])])]
+                                      (:transform-version event)])]
     (assoc event :gene-validity/gci-model model)
     (assoc event ::error :model-not-found)))
 
@@ -472,7 +471,7 @@ select ?el where {
                                                      :gene-validity-version-store
                                                      :instance])
                                   [:events :gene-validity-complete 4993])
-                    :tap-without-models true))
+                    :tap-abbrev true))
 
   (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
                           {:prefix [:events :gene-validity-complete]
@@ -520,7 +519,7 @@ select ?el where {
        (mapv #(-> % deref charred/read-json))
        tap>)
   
-  (time (gv/reprocess-events test-app {:force-reload #{
+  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/gci-model
                                                        :gene-validity/json-ld
                                                        :gene-validity/model
                                                        :gene-validity/website-event}}))
@@ -739,11 +738,15 @@ select ?x where {?x a :gg/individual ; :gg/phaseStatus ?p }")]
          (mapv #(some-> (outcome->gci-model % store)
                         :gene-validity/gci-model 
                         q))
-         (mapcat (fn [i] (map #(rdf/ld1-> % [:gg/phaseStatus]) i)))
-         set
+         (mapcat (fn [i] (map #(rdf/->kw (rdf/ld1-> % [:gg/phaseStatus])) i)))
+         frequencies
+         #_set
+         #_count
          #_(run! #(rdf/pp-model (:gene-validity/gci-model %)))))
-
+  
   #{"UNKNOWN" "SUSPECTED_IN_TRANS" "PROVEN_IN_TRANS"}
+
+  {:ProvenInTrans 1047, :SuspectedInTrans 230, :Unknown 12}
   
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
         xform-topic (get-in test-app [:topics :transform-topic])
@@ -897,7 +900,7 @@ select ?x where {?x a :gg/individual ; :gg/phaseStatus ?p }")]
     (p/publish xform-topic
                (assoc evt
                       :tap-without-models true
-                      :tap-json
+                      :tap-json true
                       :pp-model true
                       #_#_:pp-gci-model true
                       :force-reload #{:gene-validity/gci-model
@@ -1047,9 +1050,9 @@ select ?p where {
       (deliver p "Hi there!")))
   
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
-        events (rocksdb/range-get db                
-                                  {:prefix [:events :gene-validity-complete]
-                                   :return :ref})
+        events (take 1 (rocksdb/range-get db                
+                                         {:prefix [:events :gene-validity-complete]
+                                          :return :ref}))
         event-promises (mapv (fn [e] [e (promise)]) events)]
     (Thread/startVirtualThread (fn []
                                  (clojure.pprint/pprint
@@ -1071,3 +1074,70 @@ select ?p where {
            count))
 
   )
+
+;; testing validation of system changes
+(comment
+  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/gci-model
+                                                       :gene-validity/json-ld
+                                                       :gene-validity/model
+                                                       :gene-validity/website-event}}))
+  
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (rocksdb/range-get db
+                            {:prefix [:outcomes]
+                             :return :ref})
+         count))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (rocksdb/range-get db
+                            {:prefix [:transforms]
+                             :return :ref})
+         count))
+  
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         (take 10)
+         tap>))
+
+  
+  )
+(comment
+  (do
+    (defn fetch-xform [{:keys [db transform-type offset transform-version] :as req}]
+      (tap> req)
+      (storage/read db [:transforms transform-type offset transform-version]))
+
+    (defn fetch-comparision-data [fetch-request]
+      (reduce (fn [a v]
+                (assoc a
+                       v
+                       (fetch-xform (assoc fetch-request :transform-version v))))
+              {}
+              (:transform-versions fetch-request)))
+
+    (defn fetch-all-transforms [fetch-request]
+      (reduce (fn [a t]
+                (assoc a
+                       t
+                       (fetch-comparision-data (assoc fetch-request :transform-type t))))
+              {}
+              (:transform-types fetch-request)))
+
+
+    
+    (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+      (->> (storage/scan db [:outcomes])
+           (take 1)
+           (mapv #(fetch-all-transforms
+                   {:db db
+                    :transform-types [:gene-validity/json-ld :gene-validity/model]
+                    :transform-versions [1 2]
+                    :offset (::event/offset %)}))
+           tap>)))
+  )
+
+
+;; compare JSON-LD
+;; compare website events
+;; compare transformed models
+;; compare outcomes

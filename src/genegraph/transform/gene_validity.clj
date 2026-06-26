@@ -38,7 +38,7 @@
   (case (or (:platform admin-env) (System/getenv "GENEGRAPH_PLATFORM"))
     "local" {:fs-handle {:type :file :base "data/base/"}
              :public-fs-handle {:type :file :base "data/public/"}
-             :transform-version 1
+             :transform-version 2
              :local-data-path "data/"}
     "dev" (assoc (env/build-environment "522856288592" ["dataexchange-genegraph"])
                  :version 2
