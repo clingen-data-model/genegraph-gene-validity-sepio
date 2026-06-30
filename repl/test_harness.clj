@@ -1207,6 +1207,21 @@ select ?p where {
          #_count
          #_(mapcat #(map rdf/->kw (q (:gene-validity/gci-model %))))
          frequencies))
+
+  {:http://purl.obolibrary.org/obo/MI_0933 22, :http://purl.obolibrary.org/obo/MI_0935 39, :cg/GeneFunctionConsistentWithPhenotype 2087, :cg/GeneFunctionSimilarToOtherKnownDiseaseCausingGene 1098, :http://purl.obolibrary.org/obo/MI_0208 140, :cg/GeneAlteredInAffectedPatients 813, :http://purl.obolibrary.org/obo/MI_0915 1881, :cg/GeneSpecificTreatmentRescuesPhenotype 1696, :cg/ProteinAlterationDisruptsModelOrganism 8047, :cg/GeneAlterationProducesDiseaseConsistentPhenotype 4600, :cg/GeneExpressedInDiseaseRelevantTissues 3315}
+  {:http://purl.obolibrary.org/obo/MI_0933 22, :http://purl.obolibrary.org/obo/MI_0935 39, :cg/GeneFunctionConsistentWithPhenotype 2087, :cg/GeneFunctionSimilarToOtherKnownDiseaseCausingGene 1098, :http://purl.obolibrary.org/obo/MI_0208 140, :cg/GeneAlteredInAffectedPatients 813, :http://purl.obolibrary.org/obo/MI_0915 1881, :cg/ProteinAlterationDisruptsModelOrganism 8047, :cg/GeneAlterationProducesDiseaseConsistentPhenotype 4600, :cg/GeneExpressedInDiseaseRelevantTissues 3315}
+  
+  {:http://purl.obolibrary.org/obo/MI_0933 22,
+   :http://purl.obolibrary.org/obo/MI_0935 39,
+   :cg/GeneFunctionConsistentWithPhenotype 2087,
+   :cg/GeneFunctionSimilarToOtherKnownDiseaseCausingGene 1098,
+   :http://purl.obolibrary.org/obo/MI_0208 140,
+   :cg/GeneAlteredInAffectedPatients 813,
+   :http://purl.obolibrary.org/obo/MI_0915 1881,
+   :cg/ProteinAlterationDisruptsOrganismFunction 7039,
+   :cg/GeneAlterationProducesDiseaseConsistentPhenotype 4600,
+   :cg/GeneExpressedInDiseaseRelevantTissues 3315}
+  
   {:cg/BiochemicalFunctionA 1098,
    :cg/GeneExpressionB 813,
    :http://purl.obolibrary.org/obo/MI_0933 22,
@@ -1217,6 +1232,8 @@ select ?p where {
    :cg/GeneAlterationProducesDiseaseConsistentPhenotype 4600,
    :cg/BiochemicalFunctionB 2087,
    :cg/GeneExpressionA 3315}
+
+  {:cg/GeneExpressionB 813, :http://purl.obolibrary.org/obo/MI_0933 22, :http://purl.obolibrary.org/obo/MI_0935 39, :cg/GeneFunctionConsistentWithPhenotype 2087, :http://purl.obolibrary.org/obo/MI_0208 140, :http://purl.obolibrary.org/obo/MI_0915 1881, :cg/ProteinAlterationDisruptsOrganismFunction 7039, :cg/GeneFunctionSimilarToOtherKnownGenesCausingDisease 1098, :cg/GeneAlterationProducesDiseaseConsistentPhenotype 4600, :cg/GeneExpressionA 3315}
   
   ;; "none" and "review" map to neutral -- only one but seems an error
   {:gg/gcixform/PatientCells 1339, :gg/gcixform/NonPatientCells 1910, :cg/Neutral 1}
@@ -1228,4 +1245,38 @@ select ?p where {
                                                        :gene-validity/json-ld
                                                        :gene-validity/model
                                                        :gene-validity/website-event}}))
+  )
+
+
+(comment
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?c where { ?x a ?c }")]
+    (->> (storage/scan db [:outcomes])
+         (filter #(and (= 2 (:transform-version %))
+                       #_(get-in % [:gene-validity/classes
+                                  :cg/GeneFunctionStudyResult])))
+         #_(take 10)
+         (map #(outcome->model % db))
+         #_(mapcat (fn [e] (mapcat #(map rdf/->kw 
+                                       (rdf/ld-> % [:cg/interpretation]))
+                                 (q (:gene-validity/model e)))))
+         #_count
+         (mapcat #(map rdf/->kw (q (:gene-validity/model %))))
+         frequencies))
+
+  {:cg/Statement 7211,
+   :cg/FamilyCosegregation 3302, ; -> Study Result
+   :cg/VariantObservation 5814, ; -> Study Result
+   :cg/GeneFunctionStudyResult 5613,
+   :ga4gh/VariationDescriptor 5846, ; -> ? may want to drop ga4gh namespace for this, at least.
+   :cg/GeneDiseaseValidityProposition 6058,
+   :cg/CaseControlStudyResult 302,
+   :cg/Family 3302,
+   :cg/Proband 5814, ; -> Study Result
+   :cg/Cohort 302, ; -> VA something somewhere
+   :cg/UnscoreableEvidence 1399, ; -> Maybe can leave this alone for now
+   :cg/EvidenceLine 6058, 
+   :cg/Contribution 6058,
+   :cg/VariantFunctionalImpactEvidence 2951} ; -> Study Result
+
   )

@@ -14,8 +14,8 @@ construct {
   cg:scoreOfEvidenceProvided ?score .
 
   # TODO Grab the model organism from the data
-  ?evidenceItem a cg:Finding ;
-  cg:interpretation cg:ProteinAlterationDisruptsOrganismFunction ;
+  ?evidenceItem a cg:GeneFunctionStudyResult ;
+  cg:interpretation cg:ProteinAlterationDisruptsModelOrganism ;
   dc:description ?evidenceDescription ;
   dc:source ?article ;
   rdfs:label ?evidenceLabel .

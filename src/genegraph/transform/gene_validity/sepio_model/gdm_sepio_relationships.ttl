@@ -39,12 +39,12 @@ cg:GeneValidityBiochemicalFunctionCriteria a cg:Criteria ;
     :hasGCIType :BiochemicalFunction ;
     :usedIn :Functional .
 
-cg:BiochemicalFunctionA a cg:StudyOutcome ;
+cg:GeneFunctionSimilarToOtherKnownDiseaseCausingGene a cg:StudyOutcome ;
     :hasGCIType :BiochemicalFunction ;
     :hasGCISubType :A ;
     :usedIn :Functional .
 
-cg:BiochemicalFunctionB a cg:StudyOutcome ;
+cg:GeneFunctionConsistentWithPhenotype a cg:StudyOutcome ;
     :hasGCIType :BiochemicalFunction ;
     :hasGCISubType :B ;
     :usedIn :Functional .
@@ -80,12 +80,12 @@ cg:GeneValidityGeneExpressionCriteria a cg:Criteria ;
     :hasGCIType :Expression ;
     :usedIn :Functional .
 
-cg:GeneExpressionA  a cg:StudyOutcome ;
+cg:GeneExpressedInDiseaseRelevantTissues  a cg:StudyOutcome ;
     :hasGCIType :Expression ;
     :hasGCISubType :A ;
     :usedIn :Functional .
 
-cg:GeneExpressionB a cg:StudyOutcome ;
+cg:GeneAlteredInAffectedPatients a cg:StudyOutcome ;
     :hasGCIType :Expression ;
     :hasGCISubType :B ;
     :usedIn :Functional .

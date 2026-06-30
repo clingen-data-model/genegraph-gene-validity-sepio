@@ -46,10 +46,10 @@
                    unlink-variant-scores-when-proband-scores-exist
                    unlink-segregations-when-no-proband-and-lod-scores
                    #_add-legacy-website-id
-                   unpublish-evidence-level-assertion
+                   #_unpublish-evidence-level-assertion
                    prune-empty-evidence-lines
                    prune-empty-evidence-ids
-                   construct-scv)
+                   #_construct-scv)
 
 (def has-affiliation-query
   "Query that returns a curations full affiliation IRI as a Resource.
@@ -75,12 +75,10 @@
 
 (def initial-construct-queries
   [construct-proposition
-;;   construct-evidence-level-assertion
    construct-statement
    construct-experimental-evidence-lines
    construct-genetic-evidence-line
    construct-ad-variant-evidence-lines
-   #_construct-ar-variant-assertions
    construct-cc-and-seg-evidence-lines
    construct-proband-score
    construct-model-systems-evidence
@@ -91,44 +89,10 @@
    construct-proband-segregation-evidence
    construct-family-segregation-evidence
    construct-alleles
-   #_construct-articles
-   #_construct-earliest-articles
    construct-secondary-contributions
    construct-variant-score
    construct-ar-variant-score
-   construct-unscoreable-evidence
-   construct-scv
-   unpublish-evidence-level-assertion])
-
-
-(def approval-activity-query
-  (rdf/create-query "select ?activity where
- { ?activity :bfo/realizes  :cg/Approver }"))
-
-(def assertion-query
-  (rdf/create-query
-   "select ?assertion where
- { ?assertion a :cg/EvidenceStrengthAssertion }"))
-
-;; TODO evaluate removal of this
-#_(defn legacy-website-id
-  "The website uses a version of the assertion ID that incorporates
-  the approval date. Annotate the curation with this ID to retain
-  backward compatibility with the legacy schema."
-  [model]
-  (let [approval-date (some-> (approval-activity-query model)
-                              first
-                              (rdf/ld1-> [:cg/date])
-                              (s/replace #":" ""))
-        
-        [_
-         assertion-base
-         assertion-id]
-        (some->> (assertion-query model)                                
-                 first
-                 str
-                 (re-find #"^(.*/)([a-z0-9-]*)$"))]
-    (rdf/resource (str assertion-base "assertion_" assertion-id "-" approval-date))))
+   construct-unscoreable-evidence])
 
 (defn publish-or-unpublish-role [event]
   (let [res

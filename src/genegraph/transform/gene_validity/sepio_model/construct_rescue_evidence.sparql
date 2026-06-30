@@ -14,8 +14,8 @@ construct {
   cg:scoreOfEvidenceProvided ?score .
 
   # TODO Find and categorize field for model organism
-  ?evidenceItem  a cg:Finding ;
-  cg:demonstrates cg:PhenotypeRescue ;
+  ?evidenceItem  a cg:GeneFunctionStudyResult ;
+  cg:interpretation cg:GeneSpecificTreatmentRescuesPhenotype ;
   dc:description ?evidenceDescription ;
   dc:source ?article ;
   rdfs:label ?evidenceLabel .
