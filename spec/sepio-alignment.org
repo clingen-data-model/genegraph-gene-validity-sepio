@@ -9,6 +9,28 @@ These are going to be one of the main evidence items in our data set--possibly t
 
 I think in every case it will make more sense to subclass StudyResult, rather than attempting to use the type directly; there are distinct but useful concepts for each of these that would fit better as a type. For each of these I can define specialized classes. Probably is worth scanning the GCI for these types. We should define SHACL shapes for the GCI data.
 
+*** CaseControlStudyResult
+
+This is one that may deserve some modelling attention from Matt B in the future. This is likely to be resued in other more prominent models, so I think he'll be amenable to it.
+
+Will leave as is for now; likely to be subject to disruptive changes. Everything in here is sub draft, maybe "alpha" level data.
+
+*** FamilyCosegregationStudyResult
+
+Critical and frequently used type. Feels like I might spend a hot minute modeling this one. Think about the LOD score field, this seems fairly specific to the GCI but is really a general purpose field.
+
+Family and proband segregation are labelled differently--sort of. This may be a mistake I made when moving to the new version of Genegraph.
+
+*** Family
+
+This appears in a few different places. May be worth consolidating into one place.
+
+Also modeOfInheritance is represented here. Seems inappropriate, bind to Segregation instead?
+
+*** TODO FunctionalAlterationStudyResult 
+
+This is one where criteria is doing too much work. There's a subtype here that's only be represented by the criteria.
+
 *** Focus
 Probably the gene. Probably worth populating
 *** dataItems

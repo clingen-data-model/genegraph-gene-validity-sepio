@@ -115,17 +115,17 @@
             "Protein Interactions" "gcixform:ProteinInteraction"
 
             ;; rescue
-            "Cell culture" "gcixform:CellCulture"
-            "Non-human model organism" "gcixform:NonHumanModel"
-            "Patient cells" "gcixform:PatientCells"
-            "Human" "gcixform:Human"
+            "Cell culture" "cg:CellCulture" ;; not seen in ttl, investigate
+            "Non-human model organism" "cg:NonHumanModel"
+            "Patient cells" "cg:PatientCells"
+            "Human" "cg:Human"
 
             ;; model systems
-            "Cell culture model" "gcixform:CellCultureModel"
+            "Cell culture model" "cg:CellCultureModel"
 
             ;; functional alteration
-            "Non-patient cells" "gcixform:NonPatientCells"
-            "patient cells" "gcixform:PatientCells"
+            "Non-patient cells" "cg:NonPatientCells"
+            "patient cells" "cg:PatientCells"
 
             ;; ;; evidence strength
             "No Modification" "gcixform:NoModification"

@@ -14,9 +14,12 @@ construct {
   cg:scoreOfEvidenceProvided ?score .
 
   # TODO identify functional alteration field
-  ?evidenceItem  a cg:FunctionalAlteration ;
+  # Coresponds with Functional Alteration in GCI
+  ?evidenceItem  a cg:GeneFunctionStudyResult ;
+  cg:interpretation cg:GeneAlterationProducesDiseaseConsistentPhenotype ;
   dc:description ?evidenceDescription ;
   dc:source ?article ;
+  cg:modelSystem ?gciType ;
   rdfs:label ?evidenceLabel .
 }
 where {

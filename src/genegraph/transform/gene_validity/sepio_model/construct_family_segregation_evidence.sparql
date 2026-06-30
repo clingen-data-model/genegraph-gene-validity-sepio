@@ -22,7 +22,7 @@ construct {
   ?family a cg:Family ; #pco:family
   rdfs:label ?evidenceLabel ;
   cg:modeOfInheritance ?familyMoi ;
-  cg:ethnicity ?familyEthnicity .
+  cg:ethnicity ?familyEthnicity . 
 
   ?segregationEvidenceLine cg:hasEvidenceItems ?segregationID .
   

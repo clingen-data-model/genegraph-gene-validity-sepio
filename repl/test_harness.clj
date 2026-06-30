@@ -300,17 +300,15 @@
   (if-let [json-str (storage/read db [:transforms
                                       :gene-validity/json-ld
                                       (::event/offset event)
-                                      (get-in event [:versions
-                                                     :gene-validity/json-ld])])]
+                                      (:transform-version event)])]
     (assoc event ::json (charred/read-json json-str))
     (assoc event ::error :json-not-found)))
 
 (defn outcome->model [event db]
   (if-let [model (storage/read db [:transforms
                                       :gene-validity/model
-                                      (::event/offset event)
-                                      (get-in event [:versions
-                                                     :gene-validity/model])])]
+                                   (::event/offset event)
+                                   (:transform-version event)])]
     (assoc event :gene-validity/model model)
     (assoc event ::error :model-not-found)))
 
@@ -318,7 +316,7 @@
   (if-let [model (storage/read db [:transforms
                                       :gene-validity/gci-model
                                       (::event/offset event)
-                                      (:transform-version event)])]
+                                   (:transform-version event)])]
     (assoc event :gene-validity/gci-model model)
     (assoc event ::error :model-not-found)))
 
@@ -414,6 +412,13 @@ select ?el where {
            (map #(outcome->json % store))
            (map ::json)
            (run! #(json/write % w :indent :true)))))
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         (filter #(= (:gene-validity/gene %)
+                     "https://identifiers.org/hgnc:15766"))
+         (map #(outcome->gci-model % store))
+         (run! #(rdf/pp-model (:gene-validity/gci-model %)))))
 
   (println (json/write-str {:a "aaa" :b "bbb"} :indent true))
 
@@ -908,8 +913,7 @@ select ?x where {?x a :gg/individual ; :gg/phaseStatus ?p }")]
                                       :gene-validity/model
                                       :gene-validity/website-event})))
 
-  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/gci-model
-                                                       :gene-validity/json-ld
+  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/json-ld
                                                        :gene-validity/model
                                                        :gene-validity/website-event}}))
   
@@ -1134,6 +1138,8 @@ select ?p where {
                     :transform-versions [1 2]
                     :offset (::event/offset %)}))
            tap>)))
+
+  
   )
 
 
@@ -1141,3 +1147,85 @@ select ?p where {
 ;; compare website events
 ;; compare transformed models
 ;; compare outcomes
+;; Look into versioning... recurations may be getting
+;; marked as patches.
+(comment
+  ;; Case control exploration
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?x where { ?x a :cg/CaseControlStudyResult }")]
+    (->> (storage/scan db [:outcomes])
+         (filter #(and (= 2 (:transform-version %))
+                       (get-in % [:gene-validity/classes :cg/CaseControlStudyResult])))
+         (take 10)
+         (map #(outcome->model % db))
+         (mapcat (fn [e] (mapcat #(rdf/ld-> % [:cg/upperConfidenceLimit])
+                                 (q (:gene-validity/model e)))))
+         #_frequencies
+         #_tap>))
+
+  ;; cg:statisticalSignificanceValueType values
+  {"Odds Ratio" 447, "Other" 115, "" 51, "Relative Risk" 17}
+
+  ;; cg:statisticalSignificanceType values -- almost entirely free text
+  {"" 593, "Burden testing" 11, "Chi Square" 3, "Chi-squared test" 1, "Cohort Allelic Sums Test (CAST)" 1, "chi-square" 1, "No evidence for significant association" 1, "Two-sided Fisher's exact test" 2, "P<0.0005" 1, "Association analysis" 1, "Adjusted Odds Ratio by age and sex" 1, "Standard incidence ratios" 1, "Standard incidence rations" 2, "Fischer's exact test" 1, "Cumulative risk" 2, "enrichment of de novo mutations, LOF mutations, splice site mutations in RB1 compared to mutational rate expected by statistical model and over control population" 1, "Hazard ratio adjusted for age, sex, study center and % European ancestry" 1, "two-sided Fisher’s exact test" 2, "Fisher’s exact test for rare variants (n<5) or Chi-square test for common variants" 1, "Sequence Kernel Association test (SKAT-O)" 2, "Fisher Exact Test" 5, "Fishers exact " 2, "Hardy-Weinberg" 1, "mutations/subject in cases v. controls" 4, "Fisher’s exact test with Bonferroni’s  correction" 2, "Chi-Sq" 4, "Generalized estimating equations (GEE)" 1, "hazard ratios (HRs) and age-specific cumulative risks (penetrance)" 2, "zero cases were found to have a variant so they did not do the statistical tests. " 1, "Fisher’s exact test,  two-tailed P-values " 2, "TDT, Chi-square" 2, "Fisher’s exact test / Cohort Allelic Sums Test (CAST)" 1, "chi square " 1, "Fisher’sexacttest" 2, "p value only" 2, "Fisher exact test" 1, "None provided" 2, "Authors comment non-significant p-value" 1, "TDT" 2, "Hazard Ratio" 2, "chi-square analysis: enrichment in DCM in Pham et al. cohort versus gnomAD" 2, "Chi-square" 1, "SKAT-O - Significantly enriched" 1, "Joint likely gene disruptive (LGD) events" 2, "etiological fraction" 3, "Analyses of Hardy–Weinberg equilibrium and the case–control association" 1, "Fisher's exact" 5, "Fisher´s exact" 1, "Analyses of Hardy–Weinberg equilibrium and the case–control association study" 1, "Rare variants burden test: two-tailed Fisher's exact test with significance level of p<0.05 was applied to compare frequencies between total number of variants in cases and contrls." 3, "SKAT-O FDR" 1, "Chi Squared" 3, "Mann-Whitney test for compariosn of two groups, ANOVA Kruskal-Wallis for compariosn of several groups, Spearman correlation. " 1, "Association Analysis" 1}
+
+  ;; 
+
+  )
+(comment
+  ;; segregation exploration
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?x where { ?x a :cg/FamilyCosegregation }")]
+    (->> (storage/scan db [:outcomes])
+         (filter #(and (= 2 (:transform-version %))
+                       (get-in % [:gene-validity/classes :cg/FamilyCosegregation])))
+         #_(take 10)
+         (map #(outcome->model % db))
+         (mapcat (fn [e] (mapcat #(map rdf/->kw (rdf/ld-> % [:cg/sequencingMethod]))
+                                 (q (:gene-validity/model e)))))
+         frequencies
+         #_tap>))
+  
+  ;; cg:sequencingMethod
+  #:cg{:CandidateGeneSequencing 2688, :AllGenesSequencing 1566}
+  )
+
+
+(comment
+  ;; Expanding GeneFunctionStudyResult
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?fa where { ?fa :cg/interpretation ?x }")]
+    (->> (storage/scan db [:outcomes])
+         (filter #(and (= 2 (:transform-version %))
+                       (get-in % [:gene-validity/classes
+                                  :cg/GeneFunctionStudyResult])))
+         #_(take 10)
+         (map #(outcome->model % db))
+         (mapcat (fn [e] (mapcat #(map rdf/->kw 
+                                       (rdf/ld-> % [:cg/interpretation]))
+                                 (q (:gene-validity/model e)))))
+         #_count
+         #_(mapcat #(map rdf/->kw (q (:gene-validity/gci-model %))))
+         frequencies))
+  {:cg/BiochemicalFunctionA 1098,
+   :cg/GeneExpressionB 813,
+   :http://purl.obolibrary.org/obo/MI_0933 22,
+   :http://purl.obolibrary.org/obo/MI_0935 39,
+   :http://purl.obolibrary.org/obo/MI_0208 140,
+   :http://purl.obolibrary.org/obo/MI_0915 1881,
+   :cg/ProteinAlterationDisruptsOrganismFunction 7039,
+   :cg/GeneAlterationProducesDiseaseConsistentPhenotype 4600,
+   :cg/BiochemicalFunctionB 2087,
+   :cg/GeneExpressionA 3315}
+  
+  ;; "none" and "review" map to neutral -- only one but seems an error
+  {:gg/gcixform/PatientCells 1339, :gg/gcixform/NonPatientCells 1910, :cg/Neutral 1}
+  
+  ;; cg:sequencingMethod
+  #:cg{:CandidateGeneSequencing 2688, :AllGenesSequencing 1566}
+
+  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/gci-model
+                                                       :gene-validity/json-ld
+                                                       :gene-validity/model
+                                                       :gene-validity/website-event}}))
+  )

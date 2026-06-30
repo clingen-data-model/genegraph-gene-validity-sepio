@@ -13,12 +13,12 @@ construct {
   cg:directionOfEvidenceProvided ?scoreStatus .
 
 # Case control evidence item
-  ?evidenceItem a cg:Finding ;
+  ?evidenceItem a cg:CaseControlStudyResult ;
   cg:method ?studyType ;
   dc:source ?article ;
   rdfs:label ?label ;
   cg:pValue ?pValue ;
-  cg:statisticalSignificanceType  ?statisticalSignificanceType ;
+  cg:statisticalSignificanceType  ?statisticalSignificanceType ; # free text
   cg:statisticalSignificanceValueType ?statisticalSignificanceValueType ;
   cg:statisticalSignificanceValue ?statisticalSignificanceValue  ;
   cg:lowerConfidenceLimit ?confidenceFrom ; # stato

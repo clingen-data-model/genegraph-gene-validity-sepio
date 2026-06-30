@@ -92,42 +92,42 @@ cg:GeneExpressionB a cg:StudyOutcome ;
 
 ### patient cell functional alteration
 cg:GeneValidityPatientCellFunctionalAlterationCriteria a cg:Criteria ;
-    :hasGCIType :PatientCells ;
+    :hasGCIType cg:PatientCells ;
     :usedIn :FunctionalAlteration .
 
 ### non-patient cell functional alteration
 cg:GeneValidityNonPatientCellFunctionalAlterationCriteria a cg:Criteria ;
-    :hasGCIType :NonPatientCells ;
+    :hasGCIType cg:NonPatientCells ;
     :usedIn :FunctionalAlteration .
 
 # non-human model
 cg:GeneValidityNonHumanModelOrganismCriteria a cg:Criteria ;
-    :hasGCIType :NonHumanModel ;
+    :hasGCIType cg:NonHumanModel ;
     :usedIn :ModelSystems .
 
 # cell culture model
 cg:GeneValidityCellCultureModelOrganismCriteria a cg:Criteria ;
-    :hasGCIType :CellCultureModel ;
+    :hasGCIType cg:CellCultureModel ;
     :usedIn :ModelSystems .
 
 # human rescue
 cg:GeneValidityHumanRescueCriteria a cg:Criteria ;
-    :hasGCIType :Human ;
+    :hasGCIType cg:Human ;
     :usedIn :Rescue .
 
 # non-human model rescue
 cg:GeneValidityNonHumanRescueCriteria a cg:Criteria ;
-    :hasGCIType :NonHumanModel ;
+    :hasGCIType cg:NonHumanModel ;
     :usedIn :Rescue .
 
 # rescue in cell culture
 cg:GeneValidityCellCultureRescueCriteria a cg:Criteria ;
-    :hasGCIType :CellCultureModel ;
+    :hasGCIType cg:CellCultureModel ;
     :usedIn :Rescue .
 
 # rescue in patient cells
 cg:GeneValidityPatientCellRescueCriteria a cg:Criteria ;
-    :hasGCIType :PatientCells ;
+    :hasGCIType cg:PatientCells ;
     :usedIn :Rescue .
 
 #### Case Control
