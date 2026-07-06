@@ -19,7 +19,7 @@ construct {
   # Consider modeling as
 
 # Variant evidence Item
-  ?evidenceItem a cg:VariantObservation ;
+  ?evidenceItem a cg:VariantObservationStudyResult ;
   cg:allele ?variant ;
   dc:source ?article ;
   cg:alleleOrigin ?alleleOrigin ;
@@ -27,7 +27,7 @@ construct {
   cg:paternityMaternityConfirmed ?paternityMaternityConfirmed .
 
 # Proband with variant evidence item
-  ?individual a cg:Proband ;
+  ?individual a cg:ProbandStudyResult ;
   cg:sex ?sex ;
   cg:ageUnit ?ageUnit ;
   cg:ageType ?ageType ;

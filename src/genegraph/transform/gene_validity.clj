@@ -29,7 +29,7 @@
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
           (System/getenv "DX_JAAS_CONFIG")) ; prevent this in cloud deployments
-    {:platform "local"
+    {:platform "stage"
      :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG")
      :local-data-path "data/"}
     {}))
@@ -38,7 +38,7 @@
   (case (or (:platform admin-env) (System/getenv "GENEGRAPH_PLATFORM"))
     "local" {:fs-handle {:type :file :base "data/base/"}
              :public-fs-handle {:type :file :base "data/public/"}
-             :transform-version 2
+             :transform-version 1
              :local-data-path "data/"}
     "dev" (assoc (env/build-environment "522856288592" ["dataexchange-genegraph"])
                  :version 2
@@ -68,6 +68,8 @@
                   :version 1
                   :name "prod"
                   :kafka-user "User:2592237"
+                  :rdf-topic "gene-validity-sepio"
+                  :json-topic "gene-validity-sepio-jsonld"
                   :public-fs-handle {:type :gcs
                                      :bucket "genegraph-public"}
                   :fs-handle {:type :gcs
@@ -154,12 +156,13 @@
                                (select-keys [::event/key ::event/data])
                                (assoc ::event/topic :gene-validity-sepio-jsonld
                                       :gene-validity/sequence offset)))
-    website-event (event/publish (-> event
-                                     (set/rename-keys {::event/iri ::event/key
-                                                       :gene-validity/website-event ::event/data})
-                                     (select-keys [::event/key ::event/data])
-                                     (assoc ::event/topic :all-curation-events
-                                            :gene-validity/sequence offset)))
+    ;; Disabling until Phil is ready to consume messages
+    #_#_website-event (event/publish (-> event
+                                         (set/rename-keys {::event/iri ::event/key
+                                                           :gene-validity/website-event ::event/data})
+                                         (select-keys [::event/key ::event/data])
+                                         (assoc ::event/topic :all-curation-events
+                                                :gene-validity/sequence offset)))
     true (event/publish {::event/data (abbrev/abbreviate event)
                          ::event/topic :processing-records-topic})))
 
@@ -403,8 +406,8 @@
             (assoc processing-records-topic
                    :type :kafka-producer-topic
                    :reset-opts {:clear-topic true})
-            :all-curation-events
-            (assoc all-curation-events
+            #_:all-curation-events
+            #_(assoc all-curation-events
                    :type :kafka-producer-topic
                    :reset-opts {:clear-topic true})
             :trigger-snapshot

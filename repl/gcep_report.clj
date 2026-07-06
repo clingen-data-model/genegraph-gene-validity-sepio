@@ -39,19 +39,28 @@
     (->> (storage/scan store [:outcomes])
          (filter #(and (< start-epoch (::event/timestamp %))
                        (< (::event/timestamp %) end-epoch)
-                       (get (:gene-validity/activity %) :cg/Submitted))))))
+                       #_(get (:gene-validity/activity %) :cg/Submitted))))))
 
-
+(defn ep-id->iri [id]
+  (str "https://genegraph.clinicalgenome.org/agent/" id))
 
 (comment
   (def gcep-labels
-    (with-open [r (io/reader "/Users/tristan/Downloads/affils.json.txt")]
+    (with-open [r (io/reader "/Users/tristan/data/genegraph-base/affils.json")]
       (->> (charred/read-json r :key-fn keyword)
-           (mapv (fn [x] [(str "https://genegraph.clinicalgenome.org/agent/"
-                               (:affiliation_id x))
-                          (:affiliation_fullname x)]))
+           (mapcat (fn [x] [[(ep-id->iri (:affiliation_id x))
+                             (:affiliation_fullname x)]
+                            [(ep-id->iri (get-in x [:subgroups :gcep :id]))
+                             (get-in x [:subgroups :gcep :fullname])]
+                            [(ep-id->iri (get-in x [:subgroups :vcep :id]))
+                             (get-in x [:subgroups :vcep :fullname])]]))
            (into {}))))
 
+  (with-open [r (io/reader "/Users/tristan/data/genegraph-base/affils.json")]
+    (->> (charred/read-json r :key-fn keyword)
+         first))
+
+  (tap> gcep-labels)
 
   (def genes
     (with-open [r (io/reader "/Users/tristan/data/genegraph-base/hgnc.json")]
@@ -62,24 +71,27 @@
 
   (tap> genes)
 
-  
+  (->> (events-in-interval harness/test-app "2026-04-01T00:00" "2026-07-01T00:00")
+       #_(summary-records->gcep-map :gene-validity/gcep)
+       (take 5)
+       tap>)
 
   (with-open [w (io/writer "/Users/tristan/Desktop/gcep-primary.csv")]
-    (->> (events-in-interval harness/test-app "2026-01-01T00:00" "2026-04-01T00:00")
+    (->> (events-in-interval harness/test-app "2026-04-01T00:00" "2026-07-01T00:00")
          (summary-records->gcep-map :gene-validity/gcep) 
          gcep-map->csv
          (charred/write-csv w)))
 
   (with-open [w (io/writer "/Users/tristan/Desktop/gcep-secondary.csv")]
-    (->> (events-in-interval harness/test-app "2026-01-01T00:00" "2026-04-01T00:00")
+    (->> (events-in-interval harness/test-app "2026-04-01T00:00" "2026-07-01T00:00")
          (summary-records->gcep-map :gene-validity/secondary-contributor)
          #_tap>
          gcep-map->csv
          (charred/write-csv w)))
   
   (with-open [w (io/writer "/Users/tristan/Desktop/mito-curations.csv")]
-    (->> (events-in-interval harness/test-app "2026-01-01T00:00" "2026-04-01T00:00")
-         (filter #(= "https://genegraph.clinicalgenome.org/agent/10027" (:gene-validity/gcep %)))
+    (->> (events-in-interval harness/test-app "2026-04-01T00:00" "2026-07-01T00:00")
+         (filter #(= "https://genegraph.clinicalgenome.org/agent/40027" (:gene-validity/gcep %)))
          (map #(assoc %
                       :symbol (get genes (:gene-validity/gene %))
                       :publish-string (str (Instant/ofEpochMilli (::event/timestamp %)))))
@@ -91,14 +103,14 @@
          (concat [["Gene" "Published" "Approved" "Reason"]])
          (charred/write-csv w)))
 
-    (->> (events-in-interval harness/test-app "2026-01-01T00:00" "2026-04-01T00:00")
-         (filter #(= "https://genegraph.clinicalgenome.org/agent/10027" (:gene-validity/gcep %)))
-         (map :gene-validity/gdm)
-         (map #(storage/scan @(get-in harness/test-app [:storage :gene-validity-version-store :instance])
-                            [:outcomes %]))
-         (map count)
-         frequencies
-         tap>)
+  (->> (events-in-interval harness/test-app "2026-01-01T00:00" "2026-04-01T00:00")
+       (filter #(= "https://genegraph.clinicalgenome.org/agent/10027" (:gene-validity/gcep %)))
+       (map :gene-validity/gdm)
+       (map #(storage/scan @(get-in harness/test-app [:storage :gene-validity-version-store :instance])
+                           [:outcomes %]))
+       (map count)
+       frequencies
+       tap>)
   
 
 

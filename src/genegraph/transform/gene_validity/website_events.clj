@@ -133,18 +133,17 @@ select ?act where {
       (mapv #(-> % rdf/->kw (genegraph-reason->website-reason "ADMIN_UPDATE_OTHER"))
             gci-reasons)
       (cond
-          (and (= "1" major)
-               (= "0" minor)) ["NEW_CURATION"]
-          (= "0" minor) ["RECURATION_GENEGRAPH_CALCULATED"]
-          :else ["ADMIN_UPDATE_GENEGRAPH_CALCULATED"]))))
+        (and (= 1 major)
+             (= 0 minor)) ["NEW_CURATION"]
+        (= 0 minor) ["RECURATION_GENEGRAPH_CALCULATED"]
+        :else ["ADMIN_UPDATE_GENEGRAPH_CALCULATED"]))))
 
 (defn affiliation-number [curation-model]
   (if-let [approval (first (activity-query curation-model {:activity :cg/Evaluated}))]
     (->> (rdf/ld1-> approval [:cg/contributor])
          str
          (re-find #"\d+$")
-         Integer/parseInt
-         (+ 30000))))
+         Integer/parseInt)))
 
 (def proposition-query
   (rdf/create-query "
@@ -200,18 +199,19 @@ select ?x where { ?x a :cg/Statement . }")
                   :dx_location "gene-validity-sepio"
                   :additional_properties
                   {:gci_snapshot_id (if (seq snapshot-id)
-                                      (subs snapshot-id 43)
+                                      (re-find #"[^/]+$" snapshot-id)
                                       nil)
                    :genegraph_proposition_id
                    (proposition-id curation-model)
                    :genegraph_version_of
                    (:gene-validity/gdm event)}}
      :affiliation {:affiliate_id (affiliation-number curation-model)}
+     :changes (mapv ->website-change (:gene-validity/change-records event))
      :version {:display version-str
                :internal version-str
                :reasons (curation-reasons assertion version
                                           #_(:gene-validity/version event))
-               :changes (mapv ->website-change (:gene-validity/change-records event))
+
                :description (rdf/ld1-> assertion [:cg/curationReasonDescription])}}))
 
 (defn unpublish-event->website-event [event]

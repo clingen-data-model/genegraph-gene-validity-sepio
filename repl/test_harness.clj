@@ -39,7 +39,7 @@
       (get-in e [:properties :resourceParent :gdm :uuid])))
 
 (def source-file
-  "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-05-12.edn.gz")
+  "/Users/tristan/data/genegraph-neo/gene_validity_all-2026-07-01.edn.gz")
 
 (comment
 
@@ -78,11 +78,10 @@
      (run! #(p/publish (get-in test-app [:topics :gene-validity-complete]) %)
            (event-store/event-seq r))))
 
-  ;; write latest events for testing in API
-
-
-
   (+ 1 1)
+
+  (event-store/with-event-reader [r source-file]
+    (count (event-store/event-seq r)))
 
   (time
    (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
@@ -304,9 +303,17 @@
     (assoc event ::json (charred/read-json json-str))
     (assoc event ::error :json-not-found)))
 
+(defn outcome->website-event [event db]
+  (if-let [json-str (storage/read db [:transforms
+                                      :gene-validity/website-event
+                                      (::event/offset event)
+                                      (:transform-version event)])]
+    (assoc event :gene-validity/website-event json-str)
+    (assoc event ::error :website-event-not-found)))
+
 (defn outcome->model [event db]
   (if-let [model (storage/read db [:transforms
-                                      :gene-validity/model
+                                   :gene-validity/model
                                    (::event/offset event)
                                    (:transform-version event)])]
     (assoc event :gene-validity/model model)
@@ -1241,42 +1248,123 @@ select ?p where {
   ;; cg:sequencingMethod
   #:cg{:CandidateGeneSequencing 2688, :AllGenesSequencing 1566}
 
-  (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/gci-model
-                                                       :gene-validity/json-ld
-                                                       :gene-validity/model
-                                                       :gene-validity/website-event}}))
+  (time
+   (gv/reprocess-events
+    test-app
+    {:force-reload #{:gene-validity/gci-model
+                     :gene-validity/json-ld
+                     :gene-validity/model
+                     :gene-validity/website-event}}))
   )
 
 
 (comment
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
-        q (rdf/create-query "select ?c where { ?x a ?c }")]
+        q (rdf/create-query "select ?x where { ?x a ?c }")]
     (->> (storage/scan db [:outcomes])
-         (filter #(and (= 2 (:transform-version %))
+         (filter #(and (= 1 (:transform-version %))
                        #_(get-in % [:gene-validity/classes
                                   :cg/GeneFunctionStudyResult])))
          #_(take 10)
          (map #(outcome->model % db))
-         #_(mapcat (fn [e] (mapcat #(map rdf/->kw 
-                                       (rdf/ld-> % [:cg/interpretation]))
+         (mapcat (fn [e] (mapcat #(map rdf/->kw 
+                                       (rdf/ld-> % [:rdf/type]))
                                  (q (:gene-validity/model e)))))
          #_count
-         (mapcat #(map rdf/->kw (q (:gene-validity/model %))))
-         frequencies))
+         #_(mapcat #(map rdf/->kw (q (:gene-validity/model %))))
+         frequencies
+         ))
+
+{:cg/Statement 7200,
+ :cg/GeneFunctionStudyResult 23712,
+ :ga4gh/VariationDescriptor 53441,
+ :cg/GeneDiseaseValidityProposition 6051,
+ :cg/CaseControlStudyResult 695,
+ :cg/VariantObservationStudyResult 61522,
+ :cg/Family 13267,
+ :cg/Cohort 1390,
+ :cg/UnscoreableEvidence 3612,
+ :cg/EvidenceLine 131315,
+ :cg/SegregationStudyResult 13266,
+ :cg/ProbandStudyResult 56370,
+ :cg/Contribution 18689,
+ :cg/VariantFunctionalImpactEvidence 15855}
 
   {:cg/Statement 7211,
-   :cg/FamilyCosegregation 3302, ; -> Study Result
-   :cg/VariantObservation 5814, ; -> Study Result
+   :cg/GeneFunctionStudyResult 5613,
+   :ga4gh/VariationDescriptor 5846,
+   :cg/GeneDiseaseValidityProposition 6058,
+   :cg/CaseControlStudyResult 302,
+   :cg/VariantObservationStudyResult 5814,
+   :cg/Family 3302,
+   :cg/Cohort 302,
+   :cg/UnscoreableEvidence 1399,
+   :cg/EvidenceLine 6058,
+   :cg/SegregationStudyResult 3302,
+   :cg/ProbandStudyResult 5814,
+   :cg/Contribution 6058,
+   :cg/VariantFunctionalImpactEvidence 2951}
+
+  {:cg/Statement 7211,
+   :cg/FamilyCosegregation 3302,        ; -> Study Result
+   :cg/VariantObservation 5814,         ; -> Study Result
    :cg/GeneFunctionStudyResult 5613,
    :ga4gh/VariationDescriptor 5846, ; -> ? may want to drop ga4gh namespace for this, at least.
    :cg/GeneDiseaseValidityProposition 6058,
    :cg/CaseControlStudyResult 302,
    :cg/Family 3302,
-   :cg/Proband 5814, ; -> Study Result
-   :cg/Cohort 302, ; -> VA something somewhere
+   :cg/Proband 5814,             ; -> Study Result
+   :cg/Cohort 302,               ; -> VA something somewhere
    :cg/UnscoreableEvidence 1399, ; -> Maybe can leave this alone for now
    :cg/EvidenceLine 6058, 
    :cg/Contribution 6058,
    :cg/VariantFunctionalImpactEvidence 2951} ; -> Study Result
 
+  )
+
+(comment
+  ;; investigating versioning
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?x where { ?x a :cg/Statement }")]
+    (->> (storage/scan db [:outcomes])
+         (filter #(and (= 1 (:transform-version %))
+                       (= "1.0.0" (:gene-validity/version-str %))
+                       (not= #{:cg/NewCuration} (:gene-validity/curation-reasons %))
+                       (not= #{} (:gene-validity/curation-reasons %))
+                       #_(get-in % [:gene-validity/classes
+                                    :cg/GeneFunctionStudyResult])))
+         (take 1)
+         #_(mapv #(outcome->event % db))
+         (mapv #(outcome->website-event % db))
+         #_(mapv #(outcome->model % db))
+         #_(run! #(rdf/pp-model (:gene-validity/model %)))
+         tap>
+
+         #_(mapcat (fn [e] (mapcat #(map rdf/->kw 
+                                       (rdf/ld-> % [:cg/version]))
+                                 (q (:gene-validity/model e)))))
+         
+         #_(mapcat (fn [e] (map #(rdf/ld1-> % [:cg/version])
+                              (q (:gene-validity/model e)))))
+         #_count
+         #_(mapcat #(map rdf/->kw (q (:gene-validity/model %))))
+         #_(into [])
+         #_(mapv :gene-validity/curation-reasons)
+         #_frequencies
+         #_(sort-by val)
+         #_reverse
+         ))
+
+  (with-open [r (io/reader "/Users/tristan/Downloads/ClinGen-Gene-Expess-Data-03272019.json")]
+    (->> (charred/read-json r :key-fn keyword)
+         (filter #(re-find #"RAD51C" (-> % val :title)))
+         tap>))
+  )
+
+;; GDV quarterly productivity
+(comment
+  (->> (storage/scan db [:outcomes])
+       
+         )  
   )
