@@ -88,7 +88,8 @@
             "scoreStatus" {"@type" "@vocab"}
             "interactionType" {"@type" "@vocab"}
             "probandIs" {"@type" "@vocab"}
-            "genotypingMethods" {"@container" "@list"}
+            "genotypingMethods" {"@container" "@list"
+                                 "@type" "@vocab"}
             "curationReasons" {"@type" "@vocab"}
             "phaseStatus" {"@type" "@vocab"}
 

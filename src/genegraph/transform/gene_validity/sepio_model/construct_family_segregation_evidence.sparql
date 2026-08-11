@@ -8,14 +8,14 @@ construct {
   ?segregationID a cg:SegregationStudyResult ;
   cg:family ?family ;
   dc:description ?scoreDescription ;
-  cg:sequencingMethod ?sequencingMethod ;
+  cg:supportingMethodTypes ?sequencingMethod ;
   dc:source ?article ;
-  cg:estimatedLodScore ?estimatedLodScore ;
-  cg:publishedLodScore ?publishedLodScore ;
+  cg:estimatedLODScore ?estimatedLodScore ;
+  cg:publishedLODScore ?publishedLodScore ;
   cg:phenotypePositiveAllelePositive ?affected ;
   cg:phenotypeNegativeAlleleNegative ?unaffected ;
   cg:meetsInclusionCriteria ?meetsCriteria ;
-  cg:phenotype ?phenotypes ;
+  cg:phenotypes ?phenotypes ;
   cg:phenotypeFreeText ?phenotypeFreeText ;
   rdfs:label ?evidenceLabel .
 

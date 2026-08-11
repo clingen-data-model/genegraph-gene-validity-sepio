@@ -18,17 +18,16 @@ construct {
 
 # Variant evidence item
   ?evidenceItem a cg:VariantObservationStudyResult ;
-  cg:allele ?variant ;
+  cg:variant ?variant ;
   dc:source ?article ;
-  cg:alleleOrigin ?alleleOrigin ;
+  cg:variantOrigin ?alleleOrigin ;
   cg:paternityMaternityConfirmed ?paternityMaternityConfirmed ;
-  cg:observedIn ?individual ; # Check pattern in < SOP7
+  cg:variantObservedIn ?individual ; # Check pattern in < SOP7
   cg:zygosity ?zygosity .
 
 # Proband with variant evidence item
   ?individual a cg:ProbandStudyResult ;
   dc:source ?article ;
-  cg:allele ?variant ;
   cg:sex ?sex ;
   cg:ageUnit ?ageUnit ;
   cg:ageType ?ageType ;
@@ -37,14 +36,14 @@ construct {
   rdfs:label ?individualLabel ;
   cg:previousTesting ?prevTesting ;
   cg:previousTestingDescription ?prevTestingDescription ;
-  cg:firstTestingMethod ?firstTestingMethod ;
-  cg:secondTestingMethod ?secondTestingMethod ;  
-  cg:detectionMethod ?methodsOfDetection ;
+  cg:geneticTestingMethod ?firstTestingMethod ;
+  cg:genotypeConfirmationMethod ?secondTestingMethod ;  
+  cg:detectionMethodText ?methodsOfDetection ;
   cg:phenotypeFreeText ?phenotypeFreeText ;
   cg:phenotypes ?phenotypes ;
   cg:zygosity ?zygosity ;
-  cg:phase ?phaseStatus ;
-  cg:variant ?evidenceItem .
+  cg:phaseStatusConfidence ?phaseStatus ;
+  cg:hasVariant ?evidenceItem .
 
   ?family a cg:Family ; # http://purl.obolibrary.org/obo/PCO_0000020
   rdfs:label ?familyLabel ;
@@ -85,6 +84,7 @@ where {
 
   BIND(IF(?deNovo = "Yes", :cg/DeNovoAlleleOrigin , IF(?deNovo = "No", :cg/GermlineAlleleOrigin , :cg/AlleleOrigin ) ) AS ?alleleOrigin) .
 
+  # Seems to be broken, should investigate
   OPTIONAL {
       ?evidenceLine gci:maternityPaternityConfirmed ?paternityMaternityConfirmed .
   }

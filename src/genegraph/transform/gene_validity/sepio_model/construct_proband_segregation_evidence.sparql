@@ -8,10 +8,11 @@ construct {
   ?segregationID a cg:SegregationStudyResult ;
   cg:family ?family ;
   dc:description ?scoreDescription ;
-  cg:sequencingMethod ?sequencingMethod ;
+  cg:supportingMethodTypes ?sequencingMethod ;
   dc:source ?article ;
-  cg:estimatedLodScore ?estimatedLodScore ;
-  cg:publishedLodScore ?publishedLodScore ;
+  cg:estimatedLODScore ?estimatedLodScore ;
+  cg:publishedLODScore ?publishedLodScore ;
+  cg:LODScore ?lodScore ;
   cg:phenotypePositiveAllelePositive ?affected ;
   cg:phenotypeNegativeAlleleNegative ?unaffected ;
   cg:meetsInclusionCriteria ?meetsCriteria ;
@@ -63,6 +64,8 @@ where {
     ?segregation gci:estimatedLodScore ?estimatedLodScore .
   }
 
+  BIND(COALESCE(?publishedLodScore, ?estimatedLodScore) AS ?lodScore) .
+  
   optional {
     ?segregation gci:reasonExplanation ?scoreDescription ;
   }

@@ -16,7 +16,6 @@ construct {
   
   ?evidenceItem  a cg:GeneFunctionStudyResult ;
   cg:interpretation ?studyOutcome ;
-  cg:demonstrates ?studyOutcome ;
   dc:description ?evidenceDescription ;
   dc:source ?article ;
   rdfs:label ?evidenceLabel .

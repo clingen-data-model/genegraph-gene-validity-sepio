@@ -14,7 +14,7 @@ construct {
 
 # Case control evidence item
   ?evidenceItem a cg:CaseControlStudyResult ;
-  cg:method ?studyType ;
+  cg:supportingMethodTypes ?studyType ;
   dc:source ?article ;
   rdfs:label ?label ;
   cg:pValue ?pValue ;
@@ -29,20 +29,18 @@ construct {
 
   # Case cohort study
   ?caseCohort a cg:Cohort ; # stato
-  cg:allGenotypedSequenced ?caseAllGenotypedSequenced ;
-  cg:numWithVariant ?caseNumWithVariant ;
-  cg:detectionMethod ?caseDetectionMethod ;
+  cg:numberGenotyped ?caseAllGenotypedSequenced ;
+  cg:numberWithVariant ?caseNumWithVariant ;
+  cg:detectionMethodText ?caseDetectionMethod ;
   cg:alleleFrequency ?caseAlleleFrequency ;
-  cg:relatedCondition ?commonDiagnosis ;
-  cg:hasEvidenceItems ?evidenceItem .
+  cg:relatedCondition ?commonDiagnosis .
 
   # Control cohort study
   ?controlCohort a cg:Cohort ; # stato
-  cg:allGenotypedSequenced ?controlAllGenotypedSequenced ;
-  cg:numWithVariant ?controlNumWithVariant ;
-  cg:detectionMethod ?controlDetectionMethod ;
-  cg:alleleFrequency ?controlAlleleFrequency ;
-  cg:hasEvidenceItems ?evidenceItem .
+  cg:numberGenotyped ?controlAllGenotypedSequenced ;
+  cg:numberWithVariant ?controlNumWithVariant ;
+  cg:detectionMethodText ?controlDetectionMethod ;
+  cg:alleleFrequency ?controlAlleleFrequency .
 }
 where {
   ?evidenceLine a gci:caseControl ;

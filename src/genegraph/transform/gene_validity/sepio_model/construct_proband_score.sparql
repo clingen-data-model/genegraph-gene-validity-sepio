@@ -20,9 +20,9 @@ construct {
 
 # Variant evidence Item
   ?evidenceItem a cg:VariantObservationStudyResult ;
-  cg:allele ?variant ;
+  cg:variant ?variant ;
   dc:source ?article ;
-  cg:alleleOrigin ?alleleOrigin ;
+  cg:variantOrigin ?alleleOrigin ;
   cg:zygosity ?probandZygosity ;
   cg:paternityMaternityConfirmed ?paternityMaternityConfirmed .
 
@@ -36,9 +36,9 @@ construct {
   rdfs:label ?individualLabel ;
   cg:previousTesting ?prevTesting ;
   cg:previousTestingDescription ?prevTestingDescription ;
-  cg:firstTestingMethod ?firstTestingMethod ;
-  cg:secondTestingMethod ?secondTestingMethod ;  
-  cg:detectionMethod ?methodsOfDetection ;
+  cg:geneticTestingMethod ?firstTestingMethod ;
+  cg:genotypeConfirmationMethod ?secondTestingMethod ;  
+  cg:detectionMethodText ?methodsOfDetection ;
   cg:phenotypeFreeText ?phenotypeFreeText ;
   cg:phenotypes ?phenotypes ;
   dc:source ?article ;
@@ -99,6 +99,7 @@ where {
      ?individual gci:probandIs ?probandZygosity .
   }
 
+  # Seems to be broken, should investigate at some point
   OPTIONAL {
       ?individual gci:maternityPaternityConfirmed ?paternityMaternityConfirmed .
   }

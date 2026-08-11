@@ -2,12 +2,13 @@ prefix gci: <https://genegraph.clinicalgenome.org/r/>
 prefix gcixform: <https://genegraph.clinicalgenome.org/r/gcixform/>
 prefix ga4gh: <https://terms.ga4gh.org/>
 prefix skos: <http://www.w3.org/2004/02/skos/core#>
+prefix cg: <https://genegraph.clinicalgenome.org/terms/>
 
 construct
 {
 
-  ?vd a ga4gh:VariationDescriptor ;
-  ga4gh:CanonicalReference ?canonical_reference ;
+  ?vd a cg:VariationDescriptor ;
+  cg:canonicalReference ?canonical_reference ;
   skos:prefLabel ?preferred_label . 
 
 }

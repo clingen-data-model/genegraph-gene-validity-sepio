@@ -7,8 +7,16 @@ construct {
   ?evidenceLine a cg:UnscoreableEvidence ;
   dc:source ?article ;
   dc:description ?description .
+
+  ?classification cg:unusedReferences ?evidenceLine .
+  
 }
 where {
+
+  ?classification a gci:provisionalClassification ;
+  gci:approvedClassification true ;
+  gci:classificationPoints ?pointsTree .
+  
   ?evidenceLine a gci:annotation ;
   gci:articleNotes / gci:nonscorable ?nonscorable .
 

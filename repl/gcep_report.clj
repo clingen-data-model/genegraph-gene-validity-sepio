@@ -1,4 +1,4 @@
-(ns gcep_report
+(ns gcep-report
   (:require [test-harness :as harness]
             [genegraph.framework.storage :as storage]
             [genegraph.framework.event :as event]

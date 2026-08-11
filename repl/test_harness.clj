@@ -29,9 +29,12 @@
             [clojure.set :as set]
             [charred.api :as charred]
             [clojure.walk :as walk]
-            [clojure.spec.alpha :as spec])
+            [clojure.spec.alpha :as spec]
+            [clojure.edn :as edn])
   (:import [ch.qos.logback.classic Logger Level]
-           [org.slf4j LoggerFactory]))
+           [org.slf4j LoggerFactory]
+           [java.time Instant]
+           [java.io PushbackReader]))
 
 (defn gdm-id [e]
   (or (get-in e [:resourceParent :gdm :PK])
@@ -427,6 +430,29 @@ select ?el where {
          (map #(outcome->gci-model % store))
          (run! #(rdf/pp-model (:gene-validity/gci-model %)))))
 
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         (filter #(= (:gene-validity/gene %)
+                     "https://identifiers.org/hgnc:15766"))
+         (map #(outcome->event % store))
+         tap>
+         #_(map #(outcome->gci-model % store))
+         #_(run! #(rdf/pp-model (:gene-validity/gci-model %)))))
+  ;; https://genegraph.clinicalgenome.org/r/8955f461-a2dd-47a7-8f42-09df354bf073
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> #_(snapshot/latest-records store)
+         #_(gdm-id->events "ff18d307-80a8-44b8-8b1a-e26e8a7d912a" test-app)
+         (storage/scan store [:outcomes])
+         #_(filter #(= (:gene-validity/gene %)
+                     "https://identifiers.org/hgnc:15766"))
+         (filter #(= (:gene-validity/gdm %)
+                     "https://genegraph.clinicalgenome.org/r/8955f461-a2dd-47a7-8f42-09df354bf073"))
+         (mapv #(assoc % :date (Instant/ofEpochMilli (::event/timestamp %))))
+         #_(map #(outcome->event % store))
+         tap>
+         #_(map #(outcome->gci-model % store))
+         #_(run! #(rdf/pp-model (:gene-validity/gci-model %)))))
+
   (println (json/write-str {:a "aaa" :b "bbb"} :indent true))
 
   (+ 1 1)
@@ -547,6 +573,68 @@ select ?el where {
     (->> (storage/scan db [:outcomes])
          (remove :gene-validity/valid)
          (take 1)
+         (mapv (fn [o]
+                 (event/deserialize
+                  {::event/value (storage/read db
+                                               [:transforms
+                                                :gene-validity/json-ld
+                                                (::event/offset o)
+                                                1])
+                   ::event/format ::rdf/json-ld})))
+         (run! #(rdf/pp-model (::event/data %)))))
+  (def cmp
+    (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+      (->> (storage/scan db [:outcomes])
+           (remove :gene-validity/valid)
+           (take 1)
+           (mapv (fn [o]
+                   {:jsonld-model
+                    (::event/data
+                     (event/deserialize
+                      {::event/value (storage/read db
+                                                   [:transforms
+                                                    :gene-validity/json-ld
+                                                    (::event/offset o)
+                                                    1])
+                       ::event/format ::rdf/json-ld}))
+                    :model (storage/read db
+                                         [:transforms
+                                          :gene-validity/model
+                                          (::event/offset o)
+                                          1])}))
+           (first))))
+  (.size (:jsonld-model cmp))
+  (.size (:model cmp))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         (filter :gene-validity/valid)
+         (take 10)
+         (run! (fn [o]
+                 (rdf/pp-model
+                  (rdf/difference
+                   (storage/read db
+                                 [:transforms
+                                  :gene-validity/model
+                                  (::event/offset o)
+                                  1])
+                   (::event/data
+                    (event/deserialize
+                     {::event/value (storage/read db
+                                                  [:transforms
+                                                   :gene-validity/json-ld
+                                                   (::event/offset o)
+                                                   1])
+                      ::event/format ::rdf/json-ld}))))))))
+  (rdf/pp-model (rdf/difference (:model cmp) (:jsonld-model cmp)))
+
+  (rdf/pp-model (rdf/difference (:jsonld-model cmp) (:model cmp)))
+  (rdf/is-isomorphic? (:jsonld-model cmp) (:model cmp))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         (remove :gene-validity/valid)
+         (take 1)
          (map #(-> (storage/read db [:transforms :gene-validity/json-ld (::event/offset %) 1])
                    charred/read-json))
          tap>))
@@ -557,7 +645,7 @@ select ?el where {
          (remove :gene-validity/valid)
          (take 1)
          (map #(-> (storage/read db [:transforms :gene-validity/website-event (::event/offset %) 1])
-                   ))
+                   charred/read-json))
          tap>))
 
   (time (gv/reprocess-events test-app {:force-reload #{:gene-validity/json-ld
@@ -1251,20 +1339,25 @@ select ?p where {
   (time
    (gv/reprocess-events
     test-app
-    {:force-reload #{:gene-validity/gci-model
+    {:force-reload #{#_:gene-validity/gci-model
                      :gene-validity/json-ld
                      :gene-validity/model
                      :gene-validity/website-event}}))
+  (+ 1 1)
   )
 
 
+;; Constructing sets of classes and properties used by
+;; Gene Validity transform.
 (comment
+
+  ;; Get Classes
   (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
         q (rdf/create-query "select ?x where { ?x a ?c }")]
     (->> (storage/scan db [:outcomes])
          (filter #(and (= 1 (:transform-version %))
                        #_(get-in % [:gene-validity/classes
-                                  :cg/GeneFunctionStudyResult])))
+                                    :cg/GeneFunctionStudyResult])))
          #_(take 10)
          (map #(outcome->model % db))
          (mapcat (fn [e] (mapcat #(map rdf/->kw 
@@ -1275,50 +1368,256 @@ select ?p where {
          frequencies
          ))
 
-{:cg/Statement 7200,
- :cg/GeneFunctionStudyResult 23712,
- :ga4gh/VariationDescriptor 53441,
- :cg/GeneDiseaseValidityProposition 6051,
- :cg/CaseControlStudyResult 695,
- :cg/VariantObservationStudyResult 61522,
- :cg/Family 13267,
- :cg/Cohort 1390,
- :cg/UnscoreableEvidence 3612,
- :cg/EvidenceLine 131315,
- :cg/SegregationStudyResult 13266,
- :cg/ProbandStudyResult 56370,
- :cg/Contribution 18689,
- :cg/VariantFunctionalImpactEvidence 15855}
+  ;; Get Predicates contained in specific classes
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?p where { ?s a ?c ; ?p ?o}")]
+    (->> (storage/scan db [:outcomes])
+         (filter #(and (= 1 (:transform-version %))
+                       #_(get-in % [:gene-validity/classes
+                                    :cg/GeneFunctionStudyResult])))
+         #_(take 1)
+         (map #(outcome->model % db))
+         (mapcat (fn [e]
+                   (map rdf/->kw (q (:gene-validity/model e) {:c :cg/VariantFunctionalImpactEvidence}))))
+         #_(mapcat (fn [e] (mapcat #(map rdf/->kw 
+                                         (rdf/ld-> % [:rdf/type]))
+                                   )))
+         #_count
+         #_(mapcat #(map rdf/->kw (q (:gene-validity/model %))))
+         set
+         ))
 
-  {:cg/Statement 7211,
-   :cg/GeneFunctionStudyResult 5613,
-   :ga4gh/VariationDescriptor 5846,
-   :cg/GeneDiseaseValidityProposition 6058,
-   :cg/CaseControlStudyResult 302,
-   :cg/VariantObservationStudyResult 5814,
-   :cg/Family 3302,
-   :cg/Cohort 302,
-   :cg/UnscoreableEvidence 1399,
-   :cg/EvidenceLine 6058,
-   :cg/SegregationStudyResult 3302,
-   :cg/ProbandStudyResult 5814,
-   :cg/Contribution 6058,
-   :cg/VariantFunctionalImpactEvidence 2951}
+  ;; Examine objects of predicates
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?s where { ?s a ?c ; ?p ?o}")]
+    (->> (storage/scan db [:outcomes])
+         (filter #(and (= 1 (:transform-version %))))
+         (take 100)
+         (map #(outcome->model % db))
+         (mapcat (fn [e]
+                   (mapcat
+                    #(rdf/ld-> % [:cg/paternityMaternityConfirmed])
+                    (q (:gene-validity/model e)
+                       {:p :cg/paternityMaternityConfirmed}))))
+         set
+         ))
 
-  {:cg/Statement 7211,
-   :cg/FamilyCosegregation 3302,        ; -> Study Result
-   :cg/VariantObservation 5814,         ; -> Study Result
-   :cg/GeneFunctionStudyResult 5613,
-   :ga4gh/VariationDescriptor 5846, ; -> ? may want to drop ga4gh namespace for this, at least.
-   :cg/GeneDiseaseValidityProposition 6058,
-   :cg/CaseControlStudyResult 302,
-   :cg/Family 3302,
-   :cg/Proband 5814,             ; -> Study Result
-   :cg/Cohort 302,               ; -> VA something somewhere
-   :cg/UnscoreableEvidence 1399, ; -> Maybe can leave this alone for now
-   :cg/EvidenceLine 6058, 
-   :cg/Contribution 6058,
-   :cg/VariantFunctionalImpactEvidence 2951} ; -> Study Result
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "select ?s where { ?s a ?c ; ?p ?o}")]
+    (->> (storage/scan db [:outcomes])
+         (filter #(and (= 1 (:transform-version %))))
+         (take 100)
+         #_(map #(outcome->model % db))
+         (map #(outcome->gci-model % db))
+         (mapcat (fn [e]
+                   (mapcat
+                    #(rdf/ld-> % [:rdf/type])
+                    (q (:gene-validity/gci-model e)
+                       {:p :gg/maternityPaternityConfirmed}))))
+         set
+         (mapv rdf/->kw)
+         ))
+  
+  #{"Autosomal dominant/X-linked" "Semidominant" "Autosomal recessive"}
+  ;; Build value sets
+  (do 
+    (defn value-set-for-property
+      ([property] (value-set-for-property property {}))
+      ([property opts]
+       (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+             q (rdf/create-query "select ?s where { ?s a ?c ; ?p ?o}")
+             set-members (->> (storage/scan db [:outcomes])
+                              (filter #(and (= 1 (:transform-version %))))
+                              (take (:max opts 100000))
+                              (map #(outcome->model % db))
+                              (mapcat (fn [e]
+                                        (mapcat
+                                         (if (:dont-keywordize opts)
+                                           #(rdf/ld-> % [property])
+                                           #(map rdf/->kw (rdf/ld-> % [property])))
+                                         (q (:gene-validity/model e)
+                                            {:p property}))))
+                              set)]
+         (conj (mapv (fn [v]
+                       {:id v
+                        :type :skos/Concept})
+                     set-members)
+               {:id (keyword (namespace property)
+                             (str (str/capitalize (name property)) "ValueSet"))
+                :type :skos/Collection
+                :skos/member (into [] set-members)}))))
+    (value-set-for-property :cg/phaseStatusConfidence {#_#_:max 10 #_#_:dont-keywordize true}))
+
+  ;; for determining the arity of attributes
+  (do
+    (def schema-path "/Users/tristan/code/genegraph-schema/resources/schema.edn")
+    (def schema-edn
+      (with-open [r (-> schema-path io/reader PushbackReader.)]
+        (->> (edn/read r))))
+    (defn arity-for-properties-in-class
+      [class-schema]
+      (apply
+       merge-with
+       conj
+       (into {} (mapv (fn [a] [a []])
+                      (:attributes class-schema)))
+       (mapv 
+        #(reduce (fn [m attr]
+                   (assoc m attr (count (rdf/ld-> % [attr]))))
+                 {}
+                 (:attributes class-schema))
+        (:resources class-schema))))
+    (defn arity-for-properties
+      [model schema-classes]
+      (let [type-query (rdf/create-query "select ?s where { ?s a ?t }")]
+        (->> schema-classes
+             (mapv (fn [c] (assoc c :resources (type-query model {:t (:id c)}))))
+             (reduce (fn [m c] (assoc m (:id c) (arity-for-properties-in-class c))) {}))))
+    (defn arity-for-models [schema]
+      (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])
+            schema-classes (filterv #(= :rdfs/Class (:type %)) schema)]
+        (update-vals 
+         (->> (storage/scan db [:outcomes])
+              (filter #(and (= 1 (:transform-version %))))
+              (take 500)
+              (map #(outcome->model % db))
+              (mapv #(arity-for-properties (:gene-validity/model %) schema-classes))
+              (reduce (fn [m m1]
+                        (merge-with 
+                         (fn [m2 m3] (merge-with concat m2 m3))
+                         m
+                         m1))
+                      {}))
+         #(update-vals % frequencies))))
+    (tap> (arity-for-models schema-edn)))
+
+  (+ 1 1)
+
+
+  :cg/modelSystem
+  [{:id :cg/NonPatientCells, :type :skos/Concept} {:id :cg/PatientCells, :type :skos/Concept} {:id :cg/ModelsystemValueSet, :type :skos/Collection, :skos/member [:cg/NonPatientCells :cg/PatientCells]}]
+
+  ;; used in CaseControlStudyResult
+  :cg/method
+  [{:id :cg/SingleVariantAnalysis, :type :skos/Concept} {:id :cg/AggregateVariantAnalysis, :type :skos/Concept} {:id :cg/MethodValueSet, :type :skos/Collection, :skos/member [:cg/SingleVariantAnalysis :cg/AggregateVariantAnalysis]}]
+
+  :cg/interpretation
+  [{:id :http://purl.obolibrary.org/obo/MI_0933, :type :skos/Concept} {:id :http://purl.obolibrary.org/obo/MI_0935, :type :skos/Concept} {:id :cg/GeneFunctionConsistentWithPhenotype, :type :skos/Concept} {:id :cg/GeneFunctionSimilarToOtherKnownDiseaseCausingGene, :type :skos/Concept} {:id :http://purl.obolibrary.org/obo/MI_0208, :type :skos/Concept} {:id :cg/GeneAlteredInAffectedPatients, :type :skos/Concept} {:id :http://purl.obolibrary.org/obo/MI_0915, :type :skos/Concept} {:id :cg/GeneSpecificTreatmentRescuesPhenotype, :type :skos/Concept} {:id :cg/ProteinAlterationDisruptsModelOrganism, :type :skos/Concept} {:id :cg/GeneAlterationProducesDiseaseConsistentPhenotype, :type :skos/Concept} {:id :cg/GeneExpressedInDiseaseRelevantTissues, :type :skos/Concept} {:id :cg/InterpretationValueSet, :type :skos/Collection, :skos/member [:http://purl.obolibrary.org/obo/MI_0933 :http://purl.obolibrary.org/obo/MI_0935 :cg/GeneFunctionConsistentWithPhenotype :cg/GeneFunctionSimilarToOtherKnownDiseaseCausingGene :http://purl.obolibrary.org/obo/MI_0208 :cg/GeneAlteredInAffectedPatients :http://purl.obolibrary.org/obo/MI_0915 :cg/GeneSpecificTreatmentRescuesPhenotype :cg/ProteinAlterationDisruptsModelOrganism :cg/GeneAlterationProducesDiseaseConsistentPhenotype :cg/GeneExpressedInDiseaseRelevantTissues]}]
+
+
+
+  :cg/sequencingMethod
+  [{:id :cg/CandidateGeneSequencing, :type :skos/Concept} {:id :cg/AllGenesSequencing, :type :skos/Concept} {:id :cg/SequencingmethodValueSet, :type :skos/Collection, :skos/member [:cg/CandidateGeneSequencing :cg/AllGenesSequencing]}]
+
+  ;; genetictestingmethod
+  [{:id :cg/GenePanels, :type :skos/Concept} {:id :cg/SangerSequencing, :type :skos/Concept} {:id :cg/ChromosomalMicroarray, :type :skos/Concept} {:id :cg/RestrictionDigest, :type :skos/Concept} {:id :cg/Genotyping, :type :skos/Concept} {:id :cg/SSCP, :type :skos/Concept} {:id :cg/ExomeSequencing, :type :skos/Concept} {:id :cg/LinkageAnalysis, :type :skos/Concept} {:id :cg/Other, :type :skos/Concept} {:id :cg/PCR, :type :skos/Concept} {:id :cg/WholeGenomeSequencing, :type :skos/Concept} {:id :cg/DenaturingGradientGel, :type :skos/Concept} {:id :cg/HomozygosityMapping, :type :skos/Concept} {:id :cg/HighResolutionMelting, :type :skos/Concept} {:id :cg/GenotypeconfirmationmethodValueSet, :type :skos/Collection, :skos/member [:cg/GenePanels :cg/SangerSequencing :cg/ChromosomalMicroarray :cg/RestrictionDigest :cg/Genotyping :cg/SSCP :cg/ExomeSequencing :cg/LinkageAnalysis :cg/Other :cg/PCR :cg/WholeGenomeSequencing :cg/DenaturingGradientGel :cg/HomozygosityMapping :cg/HighResolutionMelting]}]
+
+  [{:id :cg/ProvenInTrans, :type :skos/Concept} {:id :cg/SuspectedInTrans, :type :skos/Concept} {:id :cg/PhaseValueSet, :type :skos/Collection, :skos/member [:cg/ProvenInTrans :cg/SuspectedInTrans]}]
+
+  [{:id :cg/ProvenInTrans, :type :skos/Concept}
+   {:id :cg/SuspectedInTrans, :type :skos/Concept}
+   {:id :cg/PhaseValueSet, :type :skos/Collection, :skos/member [:cg/ProvenInTrans :cg/SuspectedInTrans]}
+   ]
+
+  ([:cg/Approved 90] [:cg/Evaluated 85] [:cg/Submitted 85])
+
+  (with-open [r (PushbackReader. (io/reader "/Users/tristan/code/genegraph-api/schema/schema.edn"))]
+    (->> (edn/read r)
+         count))
+
+  (with-open [r (PushbackReader. (io/reader "/Users/tristan/code/genegraph-api/schema/schema.edn"))]
+    (->> (edn/read r)
+         (filterv :value-set)
+         (mapv :id)
+         #_(take 1)
+         (mapcat value-set-for-property)
+         ))
+  (def value-sets
+    '({:id :cg/Evaluated, :type :skos/Concept} {:id :cg/Approved, :type :skos/Concept} {:id :cg/Submitted, :type :skos/Concept} {:id :cg/ActivitytypeValueSet, :skos/member [:cg/Evaluated :cg/Approved :cg/Submitted]} {:id :cg/AgeAtReport, :type :skos/Concept} {:id :cg/AgeAtOnset, :type :skos/Concept} {:id :cg/AgeAtDeath, :type :skos/Concept} {:id :cg/AgeAtDiagnosis, :type :skos/Concept} {:id :cg/AgetypeValueSet, :skos/member [:cg/AgeAtReport :cg/AgeAtOnset :cg/AgeAtDeath :cg/AgeAtDiagnosis]} {:id :cg/Months, :type :skos/Concept} {:id :cg/WeeksGestation, :type :skos/Concept} {:id :cg/Days, :type :skos/Concept} {:id :cg/Hours, :type :skos/Concept} {:id :cg/Weeks, :type :skos/Concept} {:id :cg/Years, :type :skos/Concept} {:id :cg/AgeunitValueSet, :skos/member [:cg/Months :cg/WeeksGestation :cg/Days :cg/Hours :cg/Weeks :cg/Years]} {:id :cg/DeNovoAlleleOrigin, :type :skos/Concept} {:id :cg/AlleleOrigin, :type :skos/Concept} {:id :cg/GermlineAlleleOrigin, :type :skos/Concept} {:id :cg/VariantoriginValueSet, :skos/member [:cg/DeNovoAlleleOrigin :cg/AlleleOrigin :cg/GermlineAlleleOrigin]} {:id :cg/Limited, :type :skos/Concept} {:id :cg/Strong, :type :skos/Concept} {:id :cg/Definitive, :type :skos/Concept} {:id :cg/NoKnownDiseaseRelationship, :type :skos/Concept} {:id :cg/Moderate, :type :skos/Concept} {:id :cg/CalculatedclassificationValueSet, :skos/member [:cg/Limited :cg/Strong :cg/Definitive :cg/NoKnownDiseaseRelationship :cg/Moderate]} {:id :cg/Limited, :type :skos/Concept} {:id :cg/Strong, :type :skos/Concept} {:id :cg/Refuted, :type :skos/Concept} {:id :cg/Definitive, :type :skos/Concept} {:id :cg/NoKnownDiseaseRelationship, :type :skos/Concept} {:id :cg/Disputed, :type :skos/Concept} {:id :cg/Moderate, :type :skos/Concept} {:id :cg/ClassificationValueSet, :skos/member [:cg/Limited :cg/Strong :cg/Refuted :cg/Definitive :cg/NoKnownDiseaseRelationship :cg/Disputed :cg/Moderate]} {:id :cg/RecurationFrameworkChange, :type :skos/Concept} {:id :cg/RecurationCommunityRequest, :type :skos/Concept} {:id :cg/DiseaseNameUpdate, :type :skos/Concept} {:id :cg/RecurationDiscrepancyResolution, :type :skos/Concept} {:id :cg/RecurationErrorAffectingScoreorClassification, :type :skos/Concept} {:id :cg/RecurationTiming, :type :skos/Concept} {:id :cg/RecurationNewEvidence, :type :skos/Concept} {:id :cg/ErrorClarification, :type :skos/Concept} {:id :cg/NewCuration, :type :skos/Concept} {:id :cg/CurationreasonsValueSet, :skos/member [:cg/RecurationFrameworkChange :cg/RecurationCommunityRequest :cg/DiseaseNameUpdate :cg/RecurationDiscrepancyResolution :cg/RecurationErrorAffectingScoreorClassification :cg/RecurationTiming :cg/RecurationNewEvidence :cg/ErrorClarification :cg/NewCuration]} {:id :cg/Neutral, :type :skos/Concept} {:id :cg/Supports, :type :skos/Concept} {:id :cg/DirectionValueSet, :skos/member [:cg/Neutral :cg/Supports]} {:id :cg/Disputes, :type :skos/Concept} {:id :cg/Neutral, :type :skos/Concept} {:id :cg/Supports, :type :skos/Concept} {:id :cg/DirectionofevidenceprovidedValueSet, :skos/member [:cg/Disputes :cg/Neutral :cg/Supports]} {:id :cg/NotHispanicOrLatino, :type :skos/Concept} {:id :cg/Unknown, :type :skos/Concept} {:id :cg/HispanicOrLatino, :type :skos/Concept} {:id :cg/EthnicityValueSet, :skos/member [:cg/NotHispanicOrLatino :cg/Unknown :cg/HispanicOrLatino]} {:id :cg/AmbiguousSex, :type :skos/Concept} {:id :cg/Unknown, :type :skos/Concept} {:id :cg/Other, :type :skos/Concept} {:id :cg/Male, :type :skos/Concept} {:id :cg/Female, :type :skos/Concept} {:id :cg/TransMale, :type :skos/Concept} {:id :cg/Intersex, :type :skos/Concept} {:id :cg/SexValueSet, :skos/member [:cg/AmbiguousSex :cg/Unknown :cg/Other :cg/Male :cg/Female :cg/TransMale :cg/Intersex]} {:id :cg/GeneValidityProbandADDeNovoCriteria, :type :skos/Concept} {:id :cg/GeneValidityCriteria11, :type :skos/Concept} {:id :cg/GeneValidityOverallExperimentalEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityNonNullVariantCriteria, :type :skos/Concept} {:id :cg/GeneValidityPatientCellRescueCriteria, :type :skos/Concept} {:id :cg/GeneValidityOverallFunctionalEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityBiochemicalFunctionCriteria, :type :skos/Concept} {:id :cg/GeneValidityUncategorizedProbandCriteria, :type :skos/Concept} {:id :cg/GeneValidityCriteria8, :type :skos/Concept} {:id :cg/GeneValidityProteinInteractionCriteria, :type :skos/Concept} {:id :cg/GeneValidityCriteria6, :type :skos/Concept} {:id :cg/GeneValidityNonHumanModelOrganismCriteria, :type :skos/Concept} {:id :cg/GeneValidityOverallAutosomalDominantDeNovoVariantEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityOverallGeneticEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityMaximumProbandScoreCriteria, :type :skos/Concept} {:id :cg/GeneValiditySegregationEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityCriteria10, :type :skos/Concept} {:id :cg/GeneValidityCellCultureRescueCriteria, :type :skos/Concept} {:id :cg/GeneValidityOverallFunctionalAlterationEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityNonHumanRescueCriteria, :type :skos/Concept} {:id :cg/GeneValidityCriteria5, :type :skos/Concept} {:id :cg/GeneValidityCriteria9, :type :skos/Concept} {:id :cg/GeneValidityNullVariantCriteria, :type :skos/Concept} {:id :cg/GeneValidityHumanRescueCriteria, :type :skos/Concept} {:id :cg/GeneValidityOverallModelAndRescueEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityOverallAutosomalDominantOtherVariantEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityProbandARDeNovoNullVariantCriteria, :type :skos/Concept} {:id :cg/GeneValidityCriteria12, :type :skos/Concept} {:id :cg/GeneValidityPatientCellFunctionalAlterationCriteria, :type :skos/Concept} {:id :cg/GeneValidityGeneExpressionCriteria, :type :skos/Concept} {:id :cg/GeneValidityOverallCaseControlEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityCellCultureModelOrganismCriteria, :type :skos/Concept} {:id :cg/GeneValidityCriteria4, :type :skos/Concept} {:id :cg/GeneValidityNonPatientCellFunctionalAlterationCriteria, :type :skos/Concept} {:id :cg/GeneValidityProbandADNonNullCriteria, :type :skos/Concept} {:id :cg/GeneValidityProbandADNullCriteria, :type :skos/Concept} {:id :cg/GeneValidityCriteria7, :type :skos/Concept} {:id :cg/GeneValidityOverallAutosomalDominantNullVariantEvidenceCriteria, :type :skos/Concept} {:id :cg/GeneValidityCaseControlAggregateVariantAnalysisCriteria, :type :skos/Concept} {:id :cg/GeneValidityProbandARNonNullCriteria, :type :skos/Concept} {:id :cg/GeneValidityCaseControlSingleVariantAnalysisCriteria, :type :skos/Concept} {:id :cg/SpecifiedbyValueSet, :skos/member [:cg/GeneValidityProbandADDeNovoCriteria :cg/GeneValidityCriteria11 :cg/GeneValidityOverallExperimentalEvidenceCriteria :cg/GeneValidityNonNullVariantCriteria :cg/GeneValidityPatientCellRescueCriteria :cg/GeneValidityOverallFunctionalEvidenceCriteria :cg/GeneValidityBiochemicalFunctionCriteria :cg/GeneValidityUncategorizedProbandCriteria :cg/GeneValidityCriteria8 :cg/GeneValidityProteinInteractionCriteria :cg/GeneValidityCriteria6 :cg/GeneValidityNonHumanModelOrganismCriteria :cg/GeneValidityOverallAutosomalDominantDeNovoVariantEvidenceCriteria :cg/GeneValidityOverallGeneticEvidenceCriteria :cg/GeneValidityMaximumProbandScoreCriteria :cg/GeneValiditySegregationEvidenceCriteria :cg/GeneValidityCriteria10 :cg/GeneValidityCellCultureRescueCriteria :cg/GeneValidityOverallFunctionalAlterationEvidenceCriteria :cg/GeneValidityNonHumanRescueCriteria :cg/GeneValidityCriteria5 :cg/GeneValidityCriteria9 :cg/GeneValidityNullVariantCriteria :cg/GeneValidityHumanRescueCriteria :cg/GeneValidityOverallModelAndRescueEvidenceCriteria :cg/GeneValidityOverallAutosomalDominantOtherVariantEvidenceCriteria :cg/GeneValidityProbandARDeNovoNullVariantCriteria :cg/GeneValidityCriteria12 :cg/GeneValidityPatientCellFunctionalAlterationCriteria :cg/GeneValidityGeneExpressionCriteria :cg/GeneValidityOverallCaseControlEvidenceCriteria :cg/GeneValidityCellCultureModelOrganismCriteria :cg/GeneValidityCriteria4 :cg/GeneValidityNonPatientCellFunctionalAlterationCriteria :cg/GeneValidityProbandADNonNullCriteria :cg/GeneValidityProbandADNullCriteria :cg/GeneValidityCriteria7 :cg/GeneValidityOverallAutosomalDominantNullVariantEvidenceCriteria :cg/GeneValidityCaseControlAggregateVariantAnalysisCriteria :cg/GeneValidityProbandARNonNullCriteria :cg/GeneValidityCaseControlSingleVariantAnalysisCriteria]} {:id :cg/Homozygous, :type :skos/Concept} {:id :cg/BiallelicCompoundHeterozygous, :type :skos/Concept} {:id :cg/Heterozygous, :type :skos/Concept} {:id :cg/Hemizygous, :type :skos/Concept} {:id :cg/MonoallelicHeterozygous, :type :skos/Concept} {:id :cg/TwoVariantsInTrans, :type :skos/Concept} {:id :cg/BiallelicHomozygous, :type :skos/Concept} {:id :cg/ZygosityValueSet, :skos/member [:cg/Homozygous :cg/BiallelicCompoundHeterozygous :cg/Heterozygous :cg/Hemizygous :cg/MonoallelicHeterozygous :cg/TwoVariantsInTrans :cg/BiallelicHomozygous]}))
+
+  ;; Ethnicity has a :gg/ value--may need to investigate Otherwise everything works pretty well.
+  (clojure.pprint/pprint value-sets)
+  (->>  (concat '(["Exome sequencing" 17369] ["PCR" 9519] ["Sanger sequencing" 8263] ["Next generation sequencing panels" 5284] ["Other" 1746] ["Linkage analysis" 1286] ["Genotyping" 1157] ["SSCP" 1050] ["Whole genome shotgun sequencing" 839] ["Homozygosity mapping" 731] ["Chromosomal microarray" 507] ["Denaturing gradient gel" 206] ["Restriction digest" 200] ["High resolution melting" 130])
+                '(["Sanger sequencing" 14820] ["PCR" 1123] ["Exome sequencing" 713] ["Other" 701] ["Restriction digest" 634] ["Next generation sequencing panels" 382] ["SSCP" 328] ["Genotyping" 316] ["Chromosomal microarray" 180] ["Linkage analysis" 175] ["Whole genome shotgun sequencing" 144] ["Homozygosity mapping" 124] ["High resolution melting" 58] ["Denaturing gradient gel" 40]))
+        (mapv first)
+        set)
+
+  (->> #{"Linkage analysis" "Restriction digest" "Denaturing gradient gel" "Next generation sequencing panels" "Homozygosity mapping" "Exome sequencing" "High resolution melting" "Sanger sequencing" "PCR" "Whole genome shotgun sequencing" "SSCP" "Genotyping" "Other" "Chromosomal microarray"}
+       (mapv #(->> (str/split % #" ") (map str/capitalize) str/join (str "cg:"))))
+  
+  :cg/secondTestingMethod
+  (["Sanger sequencing" 14820] ["PCR" 1123] ["Exome sequencing" 713] ["Other" 701] ["Restriction digest" 634] ["Next generation sequencing panels" 382] ["SSCP" 328] ["Genotyping" 316] ["Chromosomal microarray" 180] ["Linkage analysis" 175] ["Whole genome shotgun sequencing" 144] ["Homozygosity mapping" 124] ["High resolution melting" 58] ["Denaturing gradient gel" 40])
+
+
+  
+  :cg/Statement
+  #{:cg/calculatedClassification :rdf/type :cg/contributions :cg/classification :dc/isVersionOf :cg/GCISnapshot :cg/proposition :cg/curationReasons :cg/sequence :cg/curationReasonDescription :cg/specifiedBy :cg/score :cg/direction :cg/hasEvidenceLines :cg/version :dc/description}
+  :cg/GeneFunctionStudyResult
+  #{:rdf/type :cg/interpretation :rdfs/label :cg/modelSystem :dc/source :cg/demonstrates :dc/description}
+  :cg/GeneDiseaseValidityProposition
+  #{:rdf/type :cg/predicate :cg/modeOfInheritanceQualifier :cg/objectCondition :cg/subjectGene}
+  :cg/CaseControlStudyResult
+  #{:cg/pValue :cg/method :cg/caseCohort :cg/lowerConfidenceLimit :cg/upperConfidenceLimit :cg/statisticalSignificanceValueType :rdfs/label :cg/statisticalSignificanceType :dc/source :cg/controlCohort :cg/statisticalSignificanceValue :dc/description}
+  :cg/VariantObservationStudyResult
+  #{:rdf/type :cg/allele :cg/observedIn :cg/alleleOrigin :dc/source :cg/zygosity :cg/paternityMaternityConfirmed}
+  :cg/Family
+  #{:rdf/type :cg/member :cg/ethnicity :rdfs/label :cg/modeOfInheritance}
+  :cg/Cohort
+  #{:rdf/type :cg/allGenotypedSequenced :cg/numWithVariant :cg/alleleFrequency :cg/relatedCondition :cg/hasEvidenceItems :cg/detectionMethod}
+  :cg/UnscoreableEvidence
+  #{:rdf/type :dc/source :dc/description}
+  :cg/EvidenceLine
+  #{:rdf/type :cg/scoreOfEvidenceProvided :cg/directionOfEvidenceProvided :cg/hasEvidenceItems :cg/calculatedScore :cg/specifiedBy :dc/description}
+  :cg/SegregationStudyResult
+  #{:rdf/type :cg/publishedLodScore :cg/phenotypes :cg/family :cg/phenotype :cg/sequencingMethod :cg/meetsInclusionCriteria :rdfs/label :cg/phenotypeNegativeAlleleNegative :cg/phenotypePositiveAllelePositive :dc/source :cg/proband :cg/phenotypeFreeText :cg/estimatedLodScore :dc/description}
+  :cg/VariationDescriptor
+  #{:rdf/type :skos/prefLabel :cg/canonicalReference}
+  :cg/ProbandStudyResult
+  #{:rdf/type :cg/ageType :cg/variant :cg/hasVariant :cg/phenotypes :cg/allele :cg/secondTestingMethod :cg/ethnicity :cg/phase :rdfs/label :cg/firstTestingMethod :cg/previousTesting :dc/source :cg/phenotypeFreeText :cg/sex :cg/detectionMethod :cg/ageUnit :cg/zygosity :cg/ageValue :cg/previousTestingDescription}
+  :cg/Contribution
+  #{:rdf/type :cg/date :cg/activityType :cg/contributor}
+  :cg/VariantFunctionalImpactEvidence
+  #{:rdf/type :cg/functionalDataSupport :dc/description}
+
+  (->> #{:cg/calculatedClassification :rdf/type :cg/contributions :cg/predicate :cg/ageType :sks/prefLabel :cg/variant :cg/modeOfInheritanceQualifier :cg/pValue :cg/classification :cg/interpretation :dc/isVersionOf :cg/functionalDataSupport :cg/scoreOfEvidenceProvided :cg/hasVariant :cg/method :cg/caseCohort :cg/publishedLodScore :cg/allGenotypedSequenced :cg/phenotypes :cg/GCISnapshot :cg/date :cg/allele :cg/proposition :cg/numWithVariant :cg/lowerConfidenceLimit :cg/curationReasons :cg/family :cg/alleleFrequency :cg/sequence :cg/canonicalReference :cg/phenotype :cg/upperConfidenceLimit :cg/observedIn :cg/member :cg/secondTestingMethod :cg/statisticalSignificanceValueType :cg/alleleOrigin :cg/objectCondition :cg/curationReasonDescription :cg/ethnicity :cg/phase :cg/sequencingMethod :cg/meetsInclusionCriteria :cg/subjectGene :cg/directionOfEvidenceProvided :cg/relatedCondition :cg/hasEvidenceItems :rdfs/label :cg/phenotypeNegativeAlleleNegative :cg/statisticalSignificanceType :cg/calculatedScore :cg/phenotypePositiveAllelePositive :cg/modelSystem :cg/firstTestingMethod :cg/previousTesting :dc/source :cg/activityType :cg/modeOfInheritance :cg/demonstrates :cg/specifiedBy :cg/contributor :cg/proband :cg/score :cg/phenotypeFreeText :cg/controlCohort :cg/sex :cg/direction :cg/detectionMethod :cg/estimatedLodScore :cg/ageUnit :cg/zygosity :cg/statisticalSignificanceValue :cg/paternityMaternityConfirmed :cg/ageValue :cg/hasEvidenceLines :cg/previousTestingDescription :cg/version :dc/description}
+       sort
+       (mapv (fn [p] {:id p :type :rdf/Property}))
+       clojure.pprint/pprint)
+  
+  (->> 
+   #:cg{:Statement 7374,
+        :GeneFunctionStudyResult 24247,
+        :GeneDiseaseValidityProposition 6204,
+        :CaseControlStudyResult 699,
+        :VariantObservationStudyResult 63213,
+        :Family 13494,
+        :Cohort 1398,
+        :UnscoreableEvidence 3679,
+        :EvidenceLine 134614,
+        :SegregationStudyResult 13493,
+        :VariationDescriptor 55030,
+        :ProbandStudyResult 57935,
+        :Contribution 19151,
+        :VariantFunctionalImpactEvidence 16388}
+   (mapv (fn [[k v]]
+           {:id k
+            :type :rdfs/Class}))
+   clojure.pprint/pprint)
+  
+  {:cg/Statement 7200,
+   :cg/GeneFunctionStudyResult 23712,
+   :ga4gh/VariationDescriptor 53441,
+   :cg/GeneDiseaseValidityProposition 6051,
+   :cg/CaseControlStudyResult 695,
+   :cg/VariantObservationStudyResult 61522,
+   :cg/Family 13267,
+   :cg/Cohort 1390,
+   :cg/UnscoreableEvidence 3612,
+   :cg/EvidenceLine 131315,
+   :cg/SegregationStudyResult 13266,
+   :cg/ProbandStudyResult 56370,
+   :cg/Contribution 18689,
+   :cg/VariantFunctionalImpactEvidence 15855}
 
   )
 
@@ -1355,7 +1654,49 @@ select ?p where {
          #_(sort-by val)
          #_reverse
          ))
+  
+  ;; write all-curation-events
+  (with-open [w (io/writer "/Users/tristan/Desktop/all-curation-events-sample.ndjson")]
+    (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+      (->> (storage/scan db [:outcomes])
+           #_(take 1)
+           (map #(-> (outcome->website-event % db)
+                     :gene-validity/website-event
+                     charred/write-json-str))
+           (run! (fn [r] (.write w r) (.write w "\n")))
+           #_tap>
+           ))
 
+    )
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         #_(take 10)
+         (map #(-> (outcome->website-event % db)))
+         (remove :gene-validity/website-event)
+         count))
+
+  (let [db @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (storage/scan db [:outcomes])
+         (filterv #(= "https://identifiers.org/hgnc:10294"
+                      (:gene-validity/gene %)))
+         (mapv #(-> (outcome->model % db)
+                    :gene-validity/model))
+         #_(map #(-> (outcome->website-event % db)))
+         #_(filter :payload)
+         (take-last 1)
+         (run! #(rdf/pp-model %))
+         ))
+
+  (with-open [r (io/reader "/Users/tristan/Downloads/all-curation-events-sample.ndjson")]
+    (->> (line-seq r)
+         #_(take 10)
+         (map #(->> (charred/read-json % :key-fn keyword)
+                    keys
+                    count))
+         
+         frequencies))
+  (contains? {:payload nil} :payload)
   (with-open [r (io/reader "/Users/tristan/Downloads/ClinGen-Gene-Expess-Data-03272019.json")]
     (->> (charred/read-json r :key-fn keyword)
          (filter #(re-find #"RAD51C" (-> % val :title)))
@@ -1367,4 +1708,157 @@ select ?p where {
   (->> (storage/scan db [:outcomes])
        
          )  
+  )
+
+
+
+;; TODO Finish evaluating schema. Fix outstanding flags. Add definition for items.
+;; Class/subclass relationships, needed for certain types of inheritance based restrictions.
+
+;; Definitions, class/subclass relationships,
+;; documentation generation
+;; SHACL generation
+;; 
+(comment
+  "Evaluating schema for completeness"
+  
+  (def schema-path "/Users/tristan/code/genegraph-schema/resources/schema.edn")
+  (with-open [r (-> schema-path io/reader PushbackReader.)]
+    (->> (edn/read r)
+         (filterv #(and (= :rdf/Property (:type %))
+                        (not (:range %))))
+         tap>))
+  )
+
+;; quick GC Express exploration
+(comment
+  (let [gcex "/Users/tristan/Downloads/ClinGen-Gene-Expess-Data-03272019.json"]
+    (with-open [r (io/reader gcex)]
+      (->> (charred/read-json r)
+           (filterv #(some-> % val (get-in ["genes" "HGNC:338"])))
+           tap>))))
+
+
+;; One-off query for Deb Ritter:
+
+;; I am looking to get some data on gene curation from either the website or the ClinGen data exchange. I would like to get gene curation summary text, PMIDs used for the curation, the GCEP,  gene name and disease (diseases, maybe more than one?)
+
+;; Awesome — a one off would be great. It's to do some basic query of gene curations about the length of summaries vs the classification etc. I was curious too about  the number of PMIDs i.e. does it take more or less PMIDs for definitive vs refuted and things like PMID reuse, are groups using the same PMID over and over or different ones?  I have some of this data for VCEP variant classification but not for GCEP, and will present on one of the AI Working group calls. Just wanted to have something for GCEPs too. 
+
+;; Having looked through I would need:  
+
+;; GCEP name, gene name, disease curated, classification (i.e. definitive, limited etc. I forgot this rather important item in the last email..), summary text and pmids. 
+
+;; Add length of summary text
+
+(comment
+  (def mondo (rdf/read-rdf "file:///Users/tristan/data/genegraph-base/mondo.owl" ::rdf/rdf-xml))
+  (def hgnc
+    (with-open [r (io/reader "/Users/tristan/data/genegraph-base/hgnc.json")]
+      (->> (get-in (charred/read-json r :key-fn keyword) [:response :docs])
+           #_(take 10)
+           (mapv (fn [{:keys [hgnc_id symbol]}]
+                   [(str "https://identifiers.org/"
+                         (str/lower-case hgnc_id))
+                    symbol]))
+           (into {}))))
+  (tap> hgnc)
+
+  (with-open [w (io/writer "/users/tristan/Desktop/gcep-summaries.csv")]
+    (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+          type-query (rdf/create-query "select ?x where { ?x a ?t } ")
+          source-query (rdf/create-query "select ?x where { ?s :dc/source ?x }")]
+      (->> (snapshot/latest-records store)
+           #_(map #(outcome->model % store))
+           (filter #(contains? (:gene-validity/activity %) :cg/Approved))
+           #_(take 10)
+           (map #(outcome->model % store))
+           (mapv (fn [{:gene-validity/keys [model gene disease gcep]}]
+                   (let [statement (first (type-query model {:t :cg/Statement}))
+                         summary (rdf/ld1-> statement [:dc/description])
+                         sources (source-query model)]
+                     [(get hgnc gene)
+                      (rdf/ld1-> (rdf/resource disease mondo) [:rdfs/label])
+                      (get gcep-report/gcep-labels gcep)
+                      (name (rdf/->kw (rdf/ld1-> statement [:cg/classification])))
+                      (count sources)
+                      (mapv str sources)
+                      (count summary)
+                      summary])))
+           (cons ["gene" "disease" "gcep" "classification" "reference count" "references" "summary length (characters)" "summary"])
+           (into [])
+           (charred/write-csv w))))
+
+
+
+  
+
+
+  )
+
+
+(comment
+  ;; object value frequencies
+  #:cg{:Statement {:cg/calculatedClassification {1 6204, 0 1170}, :cg/contributions {3 5457, 1 1170, 4 655, 6 8, 5 84}, :cg/classification {1 6204, 0 1170}, :dc/isVersionOf {1 7374}, :cg/GCISnapshot {1 6204, 0 1170}, :cg/proposition {1 6204, 0 1170}, :cg/curationReasons {1 2923, 2 134, 0 4294, 3 23}, :cg/sequence {1 6204, 0 1170}, :cg/curationReasonDescription {0 5485, 1 1889}, :cg/specifiedBy {1 6202, 0 1170, 2 2}, :cg/score {1 6204, 0 1170}, :cg/direction {1 6204, 0 1170}, :cg/hasEvidenceLines {2 6202, 0 1170, 4 2}, :cg/version {1 6204, 0 1170}, :dc/description {1 6199, 0 1173, 2 2}}, :GeneFunctionStudyResult {:cg/modelSystem {1 4711, 0 19536}, :cg/interpretation {1 24247}, :rdfs/label {1 24247}, :dc/source {1 24247}, :dc/description {1 24123, 0 124}}, :GeneDiseaseValidityProposition #:cg{:predicate {1 6204}, :modeOfInheritanceQualifier {1 6204}, :objectCondition {1 6202, 2 2}, :subjectGene {1 6204}}, :CaseControlStudyResult {:cg/pValue {1 525, 0 174}, :cg/caseCohort {1 699}, :cg/lowerConfidenceLimit {1 404, 0 295}, :cg/upperConfidenceLimit {1 404, 0 295}, :cg/statisticalSignificanceValueType {1 634, 0 65}, :rdfs/label {1 699}, :cg/statisticalSignificanceType {1 699}, :dc/source {1 699}, :cg/supportingMethodTypes {1 699}, :cg/controlCohort {1 699}, :cg/statisticalSignificanceValue {1 486, 0 213}, :dc/description {0 671, 1 28}}, :VariantObservationStudyResult {:rdf/type {1 63213}, :cg/allele {0 63213}, :cg/variantObservedIn {1 46018, 0 17195}, :cg/alleleOrigin {0 63213}, :dc/source {1 63213}, :cg/zygosity {1 46489, 0 16724}, :cg/paternityMaternityConfirmed {1 21842, 0 41371}}, :Family {:rdf/type {1 13494}, :cg/member {1 12224, 0 1270}, :cg/ethnicity {1 5611, 0 7883}, :rdfs/label {1 13494}, :cg/modeOfInheritance {0 13060, 1 434}}, :Cohort {:rdf/type {1 1398}, :cg/numberGenotyped {1 1398}, :cg/numWithVariant {0 1398}, :cg/alleleFrequency {1 1355, 0 43}, :cg/relatedCondition {0 712, 1 686}, :cg/hasEvidenceItems {1 1398}, :cg/detectionMethodText {1 1028, 0 370}}, :UnscoreableEvidence {:rdf/type {1 3679}, :dc/source {1 3679}, :dc/description {1 3538, 0 141}}, :EvidenceLine {:rdf/type {1 134614}, :cg/scoreOfEvidenceProvided {1 134303, 0 311}, :cg/directionOfEvidenceProvided {0 30846, 1 103750, 2 18}, :cg/hasEvidenceItems {0 1, 65 1, 70 1, 7 688, 20 111, 72 2, 27 21, 1 89772, 24 44, 102 2, 39 4, 4 1486, 77 1, 54 1, 15 267, 48 2, 50 2, 21 55, 31 11, 32 6, 40 2, 33 21, 13 276, 22 76, 36 9, 41 2, 43 2, 29 20, 44 6, 6 696, 28 31, 25 45, 34 21, 17 177, 3 8901, 12 401, 2 26444, 23 43, 47 1, 35 8, 19 107, 68 1, 11 434, 9 595, 5 2042, 14 299, 45 6, 26 34, 16 197, 81 1, 38 10, 30 36, 10 483, 18 149, 42 3, 80 2, 37 4, 8 550, 49 1}, :cg/calculatedScore {0 47344, 1 87270}, :cg/specifiedBy {1 134614}, :dc/description {0 85649, 1 48965}}, :SegregationStudyResult {:rdf/type {1 13493}, :cg/phenotypes {0 4850, 7 367, 20 11, 27 7, 1 2313, 24 2, 4 787, 15 63, 21 12, 31 1, 13 93, 22 7, 36 1, 6 497, 28 1, 25 1, 17 29, 3 1036, 12 110, 2 1548, 23 4, 19 13, 11 157, 9 194, 5 818, 14 61, 26 2, 16 21, 30 1, 10 181, 18 9, 8 296}, :cg/estimatedLODScore {1 8750, 0 4743}, :cg/family {1 13493}, :cg/LODScore {1 9128, 0 4365}, :cg/publishedLODScore {0 11756, 1 1737}, :cg/meetsInclusionCriteria {1 9011, 0 4482}, :rdfs/label {1 13493}, :cg/phenotypeNegativeAlleleNegative {0 8949, 1 4544}, :cg/phenotypePositiveAllelePositive {1 13413, 0 80}, :dc/source {1 13493}, :cg/supportingMethodTypes {0 13493}, :cg/proband {1 12339, 0 1154}, :cg/phenotypeFreeText {1 6466, 0 7027}, :dc/description {1 3936, 0 9557}}, :VariationDescriptor {:rdf/type {1 55030}, :skos/prefLabel {1 55024, 0 6}, :cg/canonicalReference {1 54833, 0 197}}, :ProbandStudyResult {:rdf/type {1 57935}, :cg/ageType {1 35949, 0 21986}, :cg/hasVariant {1 52657, 2 5278}, :cg/phenotypes {0 18419, 7 2477, 20 214, 27 92, 1 6966, 24 98, 39 1, 4 3852, 54 2, 15 530, 50 6, 21 225, 31 43, 32 36, 40 14, 33 6, 13 735, 22 110, 36 7, 41 2, 43 4, 29 35, 44 2, 6 2953, 28 34, 25 118, 34 18, 17 388, 3 4064, 12 820, 2 4612, 23 94, 47 4, 35 20, 19 228, 11 1054, 9 1414, 5 3543, 14 581, 26 56, 16 442, 38 21, 30 38, 10 1194, 18 367, 52 1, 42 1, 37 15, 63 1, 8 1977, 49 1}, :cg/ethnicity {0 50716, 1 7219}, :cg/genotypeConfirmationMethod {1 19738, 0 38197}, :cg/geneticTestingMethod {1 48287, 0 9648}, :rdfs/label {1 57935}, :cg/previousTesting {0 29155, 1 28780}, :cg/phaseStatusConfidence {0 56321, 1 1614}, :dc/source {1 57935}, :cg/phenotypeFreeText {0 28564, 1 29371}, :cg/sex {1 57890, 0 45}, :cg/detectionMethodText {1 35582, 0 22353}, :cg/ageUnit {1 35929, 0 22006}, :cg/zygosity {1 41231, 0 16704}, :cg/ageValue {1 35615, 0 22320}, :cg/previousTestingDescription {0 35439, 1 22496}}, :Contribution {:rdf/type {1 19151}, :cg/date {1 19149, 2 2}, :cg/activityType {1 19151}, :cg/contributor {1 19151}}, :VariantFunctionalImpactEvidence {:rdf/type {1 16388}, :cg/functionalDataSupport {1 16388}, :dc/description {1 16388}}}
+  
+  )
+
+
+(comment
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        q (rdf/create-query "
+select ?proband ?source where {
+?proband a :cg/ProbandStudyResult ;
+   :dc/source ?source .
+}")]
+    (->> (snapshot/latest-records store)
+         (take 5)
+         #_(remove :gene-validity/valid)
+         #_(map #(outcome->json % store))
+         #_(map #(outcome->model % store))
+         #_(mapv #(q (:gene-validity/model %) {::rdf/params {:type :table}}))
+         tap>
+         ))
+
+  ;; Adapting to this request:
+
+  ;; We're really just looking for a way to quickly identify a set of ~20 papers with increasing numbers of probands, so like 2 papers with a single proband, 2 papers with 2 probands, etc., up to like 5 probands max.  They also don't need to necessarily be from the same curation. We don't want to create any more work, certainly!  We were hypothesizing that those curations with older dates of first report might be more likely to have single proband case reports, or maybe even that Limited curations with few probands might be a good source of papers with small numbers...
+
+  (with-open [w (io/writer "/users/tristan/Desktop/papers-with-proband-count.csv")]
+    (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+          type-query (rdf/create-query "select ?x where { ?x a ?t } ")
+          source-query (rdf/create-query "select ?x where { ?s :dc/source ?x }")
+          proband-source-query (rdf/create-query "
+select ?proband ?source where {
+?proband a :cg/ProbandStudyResult ;
+   :dc/source ?source .
+}")]
+      (->> (snapshot/latest-records store)
+           #_(map #(outcome->model % store))
+           (filter #(contains? (:gene-validity/activity %) :cg/Approved))
+           #_(take 5)
+           (map #(outcome->model % store))
+           (mapcat (fn [{:gene-validity/keys [model gene disease gcep]}]
+                     (let [statement (first (type-query model {:t :cg/Statement}))
+                           probands (proband-source-query model {::rdf/params {:type :table}})
+                           proband-sources (group-by :source probands)
+                           gene-symbol (get hgnc gene)
+                           disease-name (rdf/ld1-> (rdf/resource disease mondo) [:rdfs/label])
+                           gcep-name (get gcep-report/gcep-labels gcep)
+                           classification (name (rdf/->kw (rdf/ld1-> statement [:cg/classification])))]
+                       (mapv (fn [[k v]]
+                               [(str k)
+                                (count v)
+                                gene-symbol
+                                disease-name
+                                gcep-name
+                                classification])
+                             proband-sources)
+                       #_[(get hgnc gene)
+                          (rdf/ld1-> (rdf/resource disease mondo) [:rdfs/label])
+                          (get gcep-report/gcep-labels gcep)
+                          (name (rdf/->kw (rdf/ld1-> statement [:cg/classification])))])))
+           (cons ["source" "num probands" "gene" "disease" "gcep" "classification"])
+           (into [])
+           (charred/write-csv w))))
   )

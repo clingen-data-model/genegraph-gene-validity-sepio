@@ -29,7 +29,7 @@
 (def admin-env
   (if (or (System/getenv "DX_JAAS_CONFIG_DEV")
           (System/getenv "DX_JAAS_CONFIG")) ; prevent this in cloud deployments
-    {:platform "stage"
+    {:platform "prod"
      :dataexchange-genegraph (System/getenv "DX_JAAS_CONFIG")
      :local-data-path "data/"}
     {}))
@@ -198,8 +198,10 @@
                                :exception ex)
             e)})
 
-(def json-ld-frame
+#_(def json-ld-frame
   (jsonld/json-file->doc (io/resource "frame.json")))
+(def json-ld-frame
+  (jsonld/json-file->doc (io/resource "genegraph-frame.json")))
 
 (defn add-jsonld-fn [event]
   (assoc event
@@ -413,7 +415,7 @@
             :trigger-snapshot
             {:name :trigger-snapshot
              :type :timer-topic
-             :interval (* 1000 60 10)}}
+             :interval (* 1000 60 60 12)}}
    :storage {:gene-validity-version-store (assoc gene-validity-version-store
                                                  :reset-opts {:destroy-snapshot true})}
    :processors {:gene-validity-transform
