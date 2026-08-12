@@ -30,7 +30,8 @@
             [charred.api :as charred]
             [clojure.walk :as walk]
             [clojure.spec.alpha :as spec]
-            [clojure.edn :as edn])
+            [clojure.edn :as edn]
+            [taoensso.nippy :as nippy])
   (:import [ch.qos.logback.classic Logger Level]
            [org.slf4j LoggerFactory]
            [java.time Instant]
@@ -170,7 +171,9 @@
             {:type :simple-queue-topic
              :name :trigger-snapshot}}
    :storage {:gene-validity-version-store
-             (assoc gv/gene-validity-version-store :reset-opts {})
+             (assoc gv/gene-validity-version-store
+                    :reset-opts {}
+                    :load-snapshot true)
              :curation-output curation-output}
    :processors {:gene-validity-transform #_gv/transform-processor
                 (assoc gv/transform-processor
@@ -405,7 +408,7 @@ select ?el where {
   filter not exists { ?a (:cg/hasEvidenceLines|:cg/hasEvidenceItems|:cg/evidence)* ?el . }
 }")]
     (->> (snapshot/latest-records store)
-         (remove :gene-validity/valid)
+         #_(remove :gene-validity/valid)
          ;; (take 1)
          ;; (into [])
          ;; tap>
@@ -1811,13 +1814,14 @@ select ?proband ?source where {
 ?proband a :cg/ProbandStudyResult ;
    :dc/source ?source .
 }")]
-    (->> (snapshot/latest-records store)
-         (take 5)
+    (->> #_(snapshot/latest-records store)
+         (rocksdb/range-get store {:prefix [:transforms] :return :key})
+         #_(take 5)
          #_(remove :gene-validity/valid)
          #_(map #(outcome->json % store))
          #_(map #(outcome->model % store))
          #_(mapv #(q (:gene-validity/model %) {::rdf/params {:type :table}}))
-         tap>
+         count
          ))
 
   ;; Adapting to this request:
@@ -1862,3 +1866,19 @@ select ?proband ?source where {
            (into [])
            (charred/write-csv w))))
   )
+
+
+(comment
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (with-open [i (.newIterator store)]
+      (.seekToFirst i)
+      (.next i)
+      (.next i)
+      (-> (.value i) nippy/fast-thaw tap>)
+      #_(frequencies
+         (loop [v (transient [])]
+           (if (.isValid i)
+             (let [v1 (conj! v (-> (.value i) nippy/fast-thaw type))]
+               (.next i)
+               (recur v1))
+             (persistent! v)))))))

@@ -44,6 +44,7 @@
                  :version 2
                  :name "dev"
                  :kafka-user "User:2189780"
+                 :transform-version 1
                  :fs-handle {:type :gcs
                              :bucket "genegraph-framework-dev"}
                  :public-fs-handle {:type :gcs
@@ -68,6 +69,7 @@
                   :version 1
                   :name "prod"
                   :kafka-user "User:2592237"
+                  :transform-version 1
                   :rdf-topic "gene-validity-sepio"
                   :json-topic "gene-validity-sepio-jsonld"
                   :public-fs-handle {:type :gcs
