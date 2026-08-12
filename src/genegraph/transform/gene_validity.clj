@@ -274,7 +274,6 @@
   {:type :processor
    :name :gene-validity-transform
    :subscribe :transform-topic
-   #_#_:backing-store :gene-validity-version-store
    ::event/metadata (select-keys env [:public-fs-handle :transform-version])
    :interceptors [tap-interceptor
                   #_recorder/record-event
