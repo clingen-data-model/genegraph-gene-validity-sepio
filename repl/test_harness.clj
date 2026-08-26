@@ -64,6 +64,8 @@
                         ::event/completion-promise (promise)
                         ::event/skip-local-effects true
                         ::event/skip-publish-effects true))))
+
+  (+ 1 1)
   
   ;; stop test app
   (p/stop test-app)
@@ -429,9 +431,13 @@ select ?el where {
   (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (snapshot/latest-records store)
          (filter #(= (:gene-validity/gene %)
-                     "https://identifiers.org/hgnc:15766"))
-         (map #(outcome->gci-model % store))
-         (run! #(rdf/pp-model (:gene-validity/gci-model %)))))
+                     "https://identifiers.org/hgnc:9477"))
+         (map #(outcome->event % store))
+         last
+         ::event/data
+         tap>
+         #_(map #(outcome->gci-model % store))
+         #_(run! #(rdf/pp-model (:gene-validity/gci-model %)))))
 
   (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (snapshot/latest-records store)
@@ -1882,3 +1888,51 @@ select ?proband ?source where {
                (.next i)
                (recur v1))
              (persistent! v)))))))
+
+
+
+;; compiling lists of HPO terms used by each GCEP
+(comment
+  (def hpo (rdf/read-rdf "file:///Users/tristan/data/genegraph-base/hp.owl" :rdf/rdf-xml))
+  
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        pheno-q (rdf/create-query "select ?p where { ?x :cg/phenotypes ?p }")
+        gcep-phenos (->> (snapshot/latest-records store)
+                         (filter #(contains? (:gene-validity/activity %) :cg/Approved))
+                         (take 5)
+                         (map #(outcome->model % store))
+                         (reduce (fn [m e]
+                                   (update m
+                                           (:gene-validity/gcep e)
+                                           #(set/union % (set (map str
+                                                                   (-> e :gene-validity/model pheno-q))))))
+                                 {}))]
+    (tap> gcep-phenos)
+    (run!
+       (fn [[k vals]]
+         (with-open [w (io/writer (str "/Users/tristan/data/gcep-phenos/" k ".csv"))]
+           (charred/write-csv w vals)))
+       (-> gcep-phenos
+           (update-vals (fn [phenos]
+                          (mapv 
+                           (fn [p]
+                             (let [pr (rdf/resource p hpo)]
+                               [(rdf/curie pr)
+                                (rdf/ld1-> pr [:rdfs/label])]))
+                           phenos)))
+           (update-keys (fn [k] (let [label (get gcep-report/gcep-labels k "")
+                                      cleaned-label (str/replace label  #"/" "")
+                                      truncated-label (subs cleaned-label
+                                                            0
+                                                            (min (count cleaned-label) 20))]
+                                  (str (re-find #"\d+" k) "--" truncated-label)))))))
+  
+  (+ 1 1)
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
+    (->> (snapshot/latest-records store)
+         (filter #(contains? (:gene-validity/activity %) :cg/Approved))
+         count))
+
+  (str/replace "Congenital Myopathies and Myasthenic Syndromes GCEP/Congenital Myopathies and Myasthenic Syndromes GCEP")
+  )
