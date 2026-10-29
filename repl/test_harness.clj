@@ -431,7 +431,7 @@ select ?el where {
   (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])]
     (->> (snapshot/latest-records store)
          (filter #(= (:gene-validity/gene %)
-                     "https://identifiers.org/hgnc:9477"))
+                     "https://identifiers.org/hgnc:20626"))
          (map #(outcome->event % store))
          last
          ::event/data
@@ -1926,6 +1926,48 @@ select ?proband ?source where {
                                                             0
                                                             (min (count cleaned-label) 20))]
                                   (str (re-find #"\d+" k) "--" truncated-label)))))))
+
+
+  (let [store @(get-in test-app [:storage :gene-validity-version-store :instance])
+        pheno-q (rdf/create-query "select ?x ?p where { ?x :cg/phenotypes ?p }")
+        gcep-phenos (->> (snapshot/latest-records store)
+                         (filter #(contains? (:gene-validity/activity %) :cg/Approved))
+                         #_(take 5)
+                         (map #(outcome->model % store))
+                         (reduce (fn [m e]
+                                   (update m
+                                    (:gene-validity/gcep e)
+                                    (partial
+                                     merge-with
+                                     +
+                                     (->> (pheno-q
+                                           (:gene-validity/model e)
+                                           {::rdf/params
+                                            {:type :table}})
+                                          (map :p)
+                                          (map str)
+                                          frequencies))))
+                                 {}))]
+    #_(tap> gcep-phenos)
+    (run!
+     (fn [[k vals]]
+       (with-open [w (io/writer (str "/Users/tristan/data/gcep-phenos/" k ".csv"))]
+         (charred/write-csv w vals)))
+     (-> gcep-phenos
+         (update-vals (fn [phenos]
+                        (mapv 
+                         (fn [[p count]]
+                           (let [pr (rdf/resource p hpo)]
+                             [(rdf/curie pr)
+                              (rdf/ld1-> pr [:rdfs/label])
+                              count]))
+                         (->> (sort-by val phenos) reverse (take 25)))))
+         (update-keys (fn [k] (let [label (get gcep-report/gcep-labels k "")
+                                    cleaned-label (str/replace label  #"/" "")
+                                    truncated-label (subs cleaned-label
+                                                          0
+                                                          (min (count cleaned-label) 20))]
+                                (str (re-find #"\d+" k) "--" truncated-label)))))))
   
   (+ 1 1)
 
@@ -1935,4 +1977,26 @@ select ?proband ?source where {
          count))
 
   (str/replace "Congenital Myopathies and Myasthenic Syndromes GCEP/Congenital Myopathies and Myasthenic Syndromes GCEP")
+  )
+
+;; 2026-10-27
+;; Emma raised the issue of the Muscular Dystrophies and Myopathies GCEP and that not all of the curations in the GCI are displaying on the website. This group of curations has been represented under two different names/affiliation IDs: the Limb Girdle Muscular Dystrophy GCEP (Affiliation ID 40061) changed its name in August 2023 to the Muscular Dystrophies and Myopathies GCEP, at that time the Affiliation ID also changed to 40151. 
+
+;; We'd just like to review how these GCEPs and curations are represented in each of the systems so we can all get on the same page.
+
+;; Phil has reviewed from the website side and has the following questions:
+;; What does the GPM show for Affiliate IDs 10151 and 10061?  Are they both active and what 40000 numbers do they map to?
+;; What ID did the CGI publish for secondary contributor of curation 3922e9eb-79d5-4d3d-950d-fb5f6ee51a76?
+
+(comment
+  (->> (gdm->events "3922e9eb-79d5-4d3d-950d-fb5f6ee51a76" test-app)
+       count)
+  (def curations-of-interest
+    (->> (rocksdb/range-get @(get-in test-app [:storage :gene-validity-version-store :instance])
+                            {:prefix [:events :gene-validity-complete]
+                             :return :ref})
+         (filterv (fn [e] (re-find #"3922e9eb-79d5-4d3d-950d-fb5f6ee51a76"
+                                  (-> @e ::event/data charred/write-json-str))))))
+  (count curations-of-interest)
+  (tap> (last curations-of-interest))
   )

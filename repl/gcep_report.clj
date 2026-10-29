@@ -77,13 +77,13 @@
        tap>)
 
   (with-open [w (io/writer "/Users/tristan/Desktop/gcep-primary.csv")]
-    (->> (events-in-interval harness/test-app "2026-04-01T00:00" "2026-07-01T00:00")
+    (->> (events-in-interval harness/test-app "2026-07-01T00:00" "2026-09-18T00:00")
          (summary-records->gcep-map :gene-validity/gcep) 
          gcep-map->csv
          (charred/write-csv w)))
 
   (with-open [w (io/writer "/Users/tristan/Desktop/gcep-secondary.csv")]
-    (->> (events-in-interval harness/test-app "2026-04-01T00:00" "2026-07-01T00:00")
+    (->> (events-in-interval harness/test-app "2026-07-01T00:00" "2026-09-18T00:00")
          (summary-records->gcep-map :gene-validity/secondary-contributor)
          #_tap>
          gcep-map->csv
